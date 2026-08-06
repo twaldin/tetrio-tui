@@ -1,69 +1,75 @@
-/** Shared drawing helpers + TETR.IO-ish theme (higher contrast). */
+/** Shared drawing helpers — themed, one-tone pieces with inner bevel. */
 import type { BoardGrid, Cell, PieceType } from '../types.js';
 import type { RenderBuffer, Style, RGB } from './app.js';
+import { theme, type Theme } from './themes.js';
 
-export const THEME = {
-  bg: [8, 8, 14] as RGB,
-  panel: [20, 20, 34] as RGB,
-  panelAlt: [14, 14, 24] as RGB,
-  border: [110, 110, 150] as RGB,
-  borderBright: [150, 170, 220] as RGB,
-  text: [235, 235, 245] as RGB,
-  dim: [150, 150, 180] as RGB,
-  faint: [70, 70, 95] as RGB,
-  accent: [255, 85, 200] as RGB,   // tetrio magenta
-  accent2: [90, 200, 255] as RGB,  // tetrio cyan
-  good: [120, 255, 140] as RGB,
-  warn: [255, 220, 90] as RGB,
-  bad: [255, 90, 90] as RGB,
-  league: [255, 60, 90] as RGB,
-  solo: [90, 120, 255] as RGB,
-  channel: [90, 230, 120] as RGB,
-  config: [90, 170, 255] as RGB,
-  // board cell shades (checkerboard)
-  boardA: [16, 16, 28] as RGB,
-  boardB: [22, 22, 36] as RGB,
-  gridLine: [40, 42, 60] as RGB,
-};
+// ---------------------------------------------------------------------------
+// Re-export a THEME proxy so existing `import { THEME } from './draw.js'`
+// still compiles — the proxy forwards every property read to the live theme.
+// ---------------------------------------------------------------------------
 
-/** Mino colors per piece type (bright, high-contrast). */
-export const PIECE_COLORS: Record<string, RGB> = {
-  i: [80, 230, 250],
-  o: [250, 225, 70],
-  t: [210, 100, 250],
-  s: [90, 235, 100],
-  z: [250, 80, 90],
-  l: [250, 165, 60],
-  j: [95, 130, 250],
-  g: [120, 120, 132], // garbage
-  ghost: [90, 90, 110],
-};
+/** @deprecated – prefer `import { theme } from './themes.js'` directly. */
+export const THEME: Theme = new Proxy({} as Theme, {
+  get(_target, prop) { return (theme() as any)[prop]; },
+});
 
-/** Darker shade of a color (for the bottom half of a mino, adds depth). */
-function shade(c: RGB, f: number): RGB { return [Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)]; }
+/** Piece color lookup via the active theme. */
+export function pieceColor(type: string): RGB {
+  const t = theme();
+  return (t.pieces as any)[type] ?? t.pieces.g;
+}
 
-/** Pre-computed shaded (0.82) mino colors — avoids per-cell shade() allocation. */
-const PIECE_COLORS_SHADED: Record<string, RGB> = Object.fromEntries(
-  Object.entries(PIECE_COLORS).map(([k, v]) => [k, shade(v, 0.82)])
-) as Record<string, RGB>;
+/** Darker shade of a color. */
+function shade(c: RGB, f: number): RGB {
+  return [Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)];
+}
+/** Lighter shade / highlight. */
+function tint(c: RGB, f: number): RGB {
+  return [
+    Math.min(255, Math.round(c[0] + (255 - c[0]) * f)),
+    Math.min(255, Math.round(c[1] + (255 - c[1]) * f)),
+    Math.min(255, Math.round(c[2] + (255 - c[2]) * f)),
+  ];
+}
 
-/** Pre-computed Style objects for board cells — avoids per-cell object creation. */
-const MINO_STYLE: Record<string, Style> = Object.fromEntries(
-  Object.entries(PIECE_COLORS).map(([k, v]) => [k, { fg: v }])
-) as Record<string, Style>;
-const MINO_STYLE_SHADED: Record<string, Style> = Object.fromEntries(
-  Object.entries(PIECE_COLORS_SHADED).map(([k, v]) => [k, { fg: v }])
-) as Record<string, Style>;
-const GHOST_STYLE: Style = { fg: PIECE_COLORS.ghost };
-const BOARD_STYLE_A: Style = { bg: THEME.boardA };
-const BOARD_STYLE_B: Style = { bg: THEME.boardB };
+// Backwards compat
+export const PIECE_COLORS: Record<string, RGB> = new Proxy({} as Record<string, RGB>, {
+  get(_target, prop) { return pieceColor(prop as string); },
+});
 
 export function pieceStyle(type: string, ghost = false): Style {
-  const c = ghost ? PIECE_COLORS.ghost : (PIECE_COLORS[type] ?? PIECE_COLORS.g);
+  const t = theme();
+  const c = ghost ? t.pieces.ghost : pieceColor(type);
   return { fg: c };
 }
 
-/** Draw the playfield with a checkerboard grid. Each mino = 2 chars wide. Returns pixel width. */
+// ---------------------------------------------------------------------------
+// Board rendering — one-tone minoes with inner bevel
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw a single mino (2 chars wide) at pixel position (px, py).
+ * One-tone: both cells use the same base color as BG, with a
+ * subtle inner corner/bevel rendered via block-drawing characters.
+ *
+ * The left cell gets a slightly brighter top-left corner feel (▐ with
+ * tint fg on base bg), the right cell gets a slightly darker bottom-right
+ * (▌ with shade fg on base bg). This reads as a clean bevel without the
+ * jarring 2-tone split.
+ */
+function drawMino(buf: RenderBuffer, px: number, py: number, c: RGB): void {
+  // Use solid blocks with the base color as fg, with a subtle inner bevel
+  // achieved by making the left char show a thin highlight line and the
+  // right char show a thin shadow.
+  const hi = tint(c, 0.25);    // highlight
+  const lo = shade(c, 0.72);   // shadow
+  // Left cell: '▐' draws the RIGHT half filled. fg=highlight, bg=base → thin bright left edge
+  buf.set(px, py, '▐', { fg: hi, bg: c });
+  // Right cell: '▌' draws the LEFT half filled. fg=shadow, bg=base → thin dark right edge  
+  buf.set(px + 1, py, '▌', { fg: lo, bg: c });
+}
+
+/** Draw the playfield with a checkerboard grid. Each mino = 2 chars wide. */
 export function drawBoard(
   buf: RenderBuffer,
   x: number,
@@ -71,6 +77,7 @@ export function drawBoard(
   grid: BoardGrid,
   opts: { ghostSet?: Set<number> | null; width?: number; height?: number } = {},
 ): number {
+  const t = theme();
   const h = grid.length;
   const w = grid[0]?.length ?? 10;
   const gs = opts.ghostSet;
@@ -80,42 +87,26 @@ export function drawBoard(
       const px = x + col * 2;
       const py = y + row;
       if (cell) {
-        // 2-tone mino: bright top, slightly darker bottom (reads as depth)
-        buf.set(px, py, '█', MINO_STYLE[cell] ?? MINO_STYLE.g);
-        buf.set(px + 1, py, '█', MINO_STYLE_SHADED[cell] ?? MINO_STYLE_SHADED.g);
+        const c = pieceColor(cell);
+        drawMino(buf, px, py, c);
       } else if (gs && gs.has(row * 256 + col)) {
-        buf.set(px, py, '░', GHOST_STYLE);
-        buf.set(px + 1, py, '░', GHOST_STYLE);
+        const c = t.pieces.ghost;
+        buf.set(px, py, '▐', { fg: tint(c, 0.3), bg: shade(c, 0.5) });
+        buf.set(px + 1, py, '▌', { fg: shade(c, 0.3), bg: shade(c, 0.5) });
       } else {
-        // checkerboard empty cells for readability
-        buf.set(px, py, ' ', (row + col) % 2 === 0 ? BOARD_STYLE_A : BOARD_STYLE_B);
-        buf.set(px + 1, py, ' ', (row + col) % 2 === 0 ? BOARD_STYLE_A : BOARD_STYLE_B);
+        // checkerboard empty cells
+        const bgc = (row + col) % 2 === 0 ? t.boardA : t.boardB;
+        buf.set(px, py, ' ', { bg: bgc });
+        buf.set(px + 1, py, ' ', { bg: bgc });
       }
     }
   }
   return w * 2;
 }
 
-/** Draw a piece preview centered in a box (hold / next). */
-export function drawPiecePreview(buf: RenderBuffer, x: number, y: number, type: PieceType | null): void {
-  for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) buf.set(x + c, y + r, ' ', { bg: THEME.panel });
-  if (!type) return;
-  const shape = PIECE_SHAPES[type];
-  if (!shape) return;
-  const c = PIECE_COLORS[type];
-  const cd = shade(c, 0.82);
-  const rows = shape.length, cols = shape[0].length;
-  const ox = Math.max(0, Math.floor((8 - cols * 2) / 2));
-  const oy = Math.max(0, Math.floor((4 - rows) / 2));
-  for (let r = 0; r < rows; r++) {
-    for (let cc = 0; cc < cols; cc++) {
-      if (shape[r][cc]) {
-        buf.set(x + ox + cc * 2, y + oy + r, '█', { fg: c });
-        buf.set(x + ox + cc * 2 + 1, y + oy + r, '█', { fg: cd });
-      }
-    }
-  }
-}
+// ---------------------------------------------------------------------------
+// Piece previews (hold / next)
+// ---------------------------------------------------------------------------
 
 export const PIECE_SHAPES: Record<string, number[][]> = {
   i: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
@@ -127,23 +118,63 @@ export const PIECE_SHAPES: Record<string, number[][]> = {
   j: [[1,0,0],[1,1,1],[0,0,0]],
 };
 
-/** Draw a panel box with a title in the top border. */
-export function drawPanel(buf: RenderBuffer, x: number, y: number, w: number, h: number, title: string, opts: { color?: RGB; fill?: boolean } = {}): void {
-  const color = opts.color ?? THEME.border;
-  if (opts.fill !== false) buf.fillRect(x, y, w, h, ' ', { bg: THEME.panel });
-  drawBox(buf, x, y, w, h, { fg: color });
-  if (title) {
-    buf.drawText(x + 2, y, ` ${title} `, { fg: THEME.dim, bg: THEME.panel });
+/** Draw a piece preview centered in a box (hold / next). */
+export function drawPiecePreview(buf: RenderBuffer, x: number, y: number, type: PieceType | null): void {
+  const t = theme();
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) buf.set(x + c, y + r, ' ', { bg: t.panel });
+  if (!type) return;
+  const shape = PIECE_SHAPES[type];
+  if (!shape) return;
+  const c = pieceColor(type);
+  const rows = shape.length, cols = shape[0].length;
+  const ox = Math.max(0, Math.floor((8 - cols * 2) / 2));
+  const oy = Math.max(0, Math.floor((4 - rows) / 2));
+  for (let r = 0; r < rows; r++) {
+    for (let cc = 0; cc < cols; cc++) {
+      if (shape[r][cc]) {
+        drawMino(buf, x + ox + cc * 2, y + oy + r, c);
+      }
+    }
   }
 }
 
+// ---------------------------------------------------------------------------
+// Boxes & panels — rounded corners
+// ---------------------------------------------------------------------------
+
+/** Draw a box with rounded corners (╭╮╰╯). */
 export function drawBox(buf: RenderBuffer, x: number, y: number, w: number, h: number, style?: Style): void {
   if (buf.drawBox) { buf.drawBox(x, y, w, h, style); return; }
-  const s = style ?? { fg: THEME.border };
-  buf.set(x, y, '┌', s); buf.set(x + w - 1, y, '┐', s);
-  buf.set(x, y + h - 1, '└', s); buf.set(x + w - 1, y + h - 1, '┘', s);
+  const t = theme();
+  const s = style ?? { fg: t.border };
+  buf.set(x, y, '╭', s); buf.set(x + w - 1, y, '╮', s);
+  buf.set(x, y + h - 1, '╰', s); buf.set(x + w - 1, y + h - 1, '╯', s);
   for (let i = 1; i < w - 1; i++) { buf.set(x + i, y, '─', s); buf.set(x + i, y + h - 1, '─', s); }
   for (let i = 1; i < h - 1; i++) { buf.set(x, y + i, '│', s); buf.set(x + w - 1, y + i, '│', s); }
+}
+
+/** Draw a strong board border (double-line feel but using box-drawing). */
+export function drawBoardBorder(buf: RenderBuffer, x: number, y: number, w: number, h: number, style?: Style): void {
+  const t = theme();
+  const s = style ?? { fg: t.borderBright };
+  buf.set(x, y, '╭', s); buf.set(x + w - 1, y, '╮', s);
+  buf.set(x, y + h - 1, '╰', s); buf.set(x + w - 1, y + h - 1, '╯', s);
+  for (let i = 1; i < w - 1; i++) { buf.set(x + i, y, '━', s); buf.set(x + i, y + h - 1, '━', s); }
+  for (let i = 1; i < h - 1; i++) { buf.set(x, y + i, '┃', s); buf.set(x + w - 1, y + i, '┃', s); }
+}
+
+/** Draw a panel box with a title in the top border. */
+export function drawPanel(buf: RenderBuffer, x: number, y: number, w: number, h: number, title: string, opts: { color?: RGB; fill?: boolean } = {}): void {
+  const t = theme();
+  const color = opts.color ?? t.border;
+  if (opts.fill !== false) buf.fillRect(x, y, w, h, ' ', { bg: t.panel });
+  drawBox(buf, x, y, w, h, { fg: color });
+  if (title) {
+    const tx = x + 2;
+    buf.set(tx - 1, y, '┤', { fg: color });
+    buf.drawText(tx, y, ` ${title} `, { fg: t.dim, bold: true, bg: t.panel });
+    buf.set(tx + title.length + 2, y, '├', { fg: color });
+  }
 }
 
 export function center(buf: RenderBuffer, y: number, text: string, style?: Style): void {
@@ -152,19 +183,17 @@ export function center(buf: RenderBuffer, y: number, text: string, style?: Style
 
 /** A menu card (bordered, colored accent edge, big label + subtitle). */
 export function drawMenuItem(buf: RenderBuffer, x: number, y: number, w: number, label: string, sub: string, selected: boolean, color: RGB): void {
+  const t = theme();
   const h = 3;
   if (selected) {
-    // filled card in the section color, dark text
     buf.fillRect(x, y, w, h, ' ', { bg: color });
-    // darker accent edge on the left
     for (let i = 0; i < h; i++) buf.set(x, y + i, '▌', { fg: shade(color, 0.6), bg: color });
     buf.drawText(x + 2, y, label, { fg: [12, 12, 20] as RGB, bold: true, bg: color });
     buf.drawText(x + 2, y + 1, sub, { fg: [30, 30, 44] as RGB, bg: color });
   } else {
-    // bordered card, colored left edge, panel bg
-    buf.fillRect(x, y, w, h, ' ', { bg: THEME.panel });
-    for (let i = 0; i < h; i++) buf.set(x, y + i, '▌', { fg: color, bg: THEME.panel });
-    buf.drawText(x + 2, y, label, { fg: THEME.text, bold: true });
-    buf.drawText(x + 2, y + 1, sub, { fg: THEME.dim });
+    buf.fillRect(x, y, w, h, ' ', { bg: t.panel });
+    for (let i = 0; i < h; i++) buf.set(x, y + i, '▌', { fg: color, bg: t.panel });
+    buf.drawText(x + 2, y, label, { fg: t.text, bold: true });
+    buf.drawText(x + 2, y + 1, sub, { fg: t.dim });
   }
 }

@@ -3,7 +3,7 @@
  * Used for versus (league/custom) AND offline practice (solo modes).
  */
 import type { RenderBuffer, Screen, KeyEvent } from '../app.js';
-import { THEME, PIECE_COLORS, drawBoard, drawPiecePreview, drawBox, drawPanel, center } from '../draw.js';
+import { THEME, PIECE_COLORS, drawBoard, drawPiecePreview, drawBox, drawBoardBorder, drawPanel, center, pieceColor } from '../draw.js';
 import { LocalGameController } from '../../game/localgame.js';
 import { OpponentTracker } from '../../game/state.js';
 import { visibleBoard, BUFFER_ROWS } from '../../game/engine.js';
@@ -157,7 +157,7 @@ export class GameScreen implements Screen {
     buf.drawText(sx2 + 6, boardY + 16, `${st.garbage.received}`, { fg: THEME.bad, bold: true });
 
     // main board: strong border + checkerboard interior
-    drawBox(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, { fg: THEME.borderBright });
+    drawBoardBorder(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, { fg: THEME.borderBright });
     const ghostSet = computeGhostSet(s.falling);
     drawBoard(buf, boardX, boardY, board, { ghostSet });
 

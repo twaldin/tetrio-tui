@@ -138,6 +138,13 @@ export const NEUTRAL_INPUT: InputState = {
   left: false, right: false, softDrop: false, rotCW: false, rotCCW: false, rot180: false, hardDrop: false, hold: false,
 };
 
+/** Copy input fields in-place (avoids object spread allocation). */
+function copyInput(dst: InputState, src: InputState): void {
+  dst.left = src.left; dst.right = src.right; dst.softDrop = src.softDrop;
+  dst.rotCW = src.rotCW; dst.rotCCW = src.rotCCW; dst.rot180 = src.rot180;
+  dst.hardDrop = src.hardDrop; dst.hold = src.hold;
+}
+
 function emptyStats(): GameStats {
   return {
     lines: 0, level: 1, score: 0, piecesplaced: 0, inputs: 0, holds: 0,
@@ -431,7 +438,7 @@ export function tick(engine: Engine, input: InputState): TickEvents {
     const lockEv = lockPiece(engine);
     Object.assign(events, lockEv);
     applyGravityStats(engine);
-    engine.prevInput = { ...input };
+    copyInput(engine.prevInput, input);
     return events;
   }
 
@@ -495,7 +502,7 @@ export function tick(engine: Engine, input: InputState): TickEvents {
   engine.state.g = engine.g;
   engine.state.combo = engine.combo;
   engine.state.btb = engine.btb;
-  engine.prevInput = { ...input };
+  copyInput(engine.prevInput, input);
   return events;
 }
 

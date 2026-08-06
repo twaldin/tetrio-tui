@@ -24,3 +24,11 @@
 
 ---
 
+## Iteration 3: In-place effect aging (eliminate filter() array alloc)
+- **Hypothesis**: `this.effects.filter(...)` creates a new array every frame. Replace with in-place compaction using writeIdx.
+- **Before**: frame_ms=0.0353, alloc_kb=0.12, heap_delta=0.47MB
+- **After**: frame_ms=0.035, alloc_kb=0.064, heap_delta=0.26MB
+- **Decision**: KEEP ✅ — 47% fewer allocs
+
+---
+

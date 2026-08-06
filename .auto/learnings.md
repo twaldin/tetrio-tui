@@ -57,3 +57,11 @@
 
 ---
 
+## Iteration 8: Optimize CellBuffer set/fillRect/drawText in driver.ts
+- **Hypothesis**: CellBuffer.set() recomputes rgbToNum per char in loop; fillRect calls set() 3740 times with per-call overhead; drawText iterates with for-of then calls set() per char.
+- **Changes**: Pre-compute fg/bg/attr once in set(); inline fillRect loop with pre-computed values and clamped bounds; drawText delegates to set() with full string.
+- **Impact on benchmark**: None (bench uses BenchBuf). No regression.
+- **Decision**: KEEP ✅ — optimizes the real CellBuffer hot path for actual terminal rendering
+
+---
+

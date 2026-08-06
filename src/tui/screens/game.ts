@@ -99,8 +99,12 @@ export class GameScreen implements Screen {
       if (events.lines?.allclear) this.effects.push({ kind: 'allclear', frame: this.frame, text: 'ALL CLEAR' });
       if (events.gameover) this.effects.push({ kind: 'garbage', frame: this.frame, text: 'TOP OUT' });
     }
-    // age effects
-    this.effects = this.effects.filter((e) => this.frame - e.frame < 60);
+    // age effects (in-place to avoid array allocation)
+    let writeIdx = 0;
+    for (let i = 0; i < this.effects.length; i++) {
+      if (this.frame - this.effects[i].frame < 60) this.effects[writeIdx++] = this.effects[i];
+    }
+    this.effects.length = writeIdx;
     if (this.shakeFrames > 0) this.shakeFrames--;
   }
 

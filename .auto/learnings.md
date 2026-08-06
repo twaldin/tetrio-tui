@@ -16,3 +16,11 @@
 
 ---
 
+## Iteration 2: Pre-compute piece color styles for drawBoard
+- **Hypothesis**: drawBoard creates new Style objects ({fg: c}) and calls shade(c, 0.82) per filled cell per frame. Pre-compute MINO_STYLE, MINO_STYLE_SHADED, GHOST_STYLE, BOARD_STYLE_A/B as module-level constants.
+- **Before**: frame_ms=0.035, alloc_kb=0.2, heap_delta=0.65MB
+- **After**: frame_ms=0.0353, alloc_kb=0.12, heap_delta=0.47MB
+- **Decision**: KEEP ✅ — 40% fewer allocs, marginal frame_ms (within noise)
+
+---
+

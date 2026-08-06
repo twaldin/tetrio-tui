@@ -225,40 +225,6 @@ export class GameScreen implements Screen {
 const ACTION_KEYS = new Set(['hardDrop', 'rotateCW', 'rotateCCW', 'rotate180', 'hold', 'reset', 'undo', 'redo']);
 
 
-/** The visible-board cells occupied by a falling piece (for lock flash). */
-function pieceCellsVisible(falling: { type: string; x: number; y: number; r: number }): [number, number][] {
-  const cells: [number, number][] = [];
-  const shape = PIECE_ROTATIONS[falling.type as keyof typeof PIECE_ROTATIONS][falling.r];
-  for (const [cx, cy] of shape) {
-    const bx = falling.x + cx;
-    const by = Math.floor(falling.y) + cy - BUFFER_ROWS;
-    if (by >= 0) cells.push([bx, by]);
-  }
-  return cells;
-}
-
-/** The trail cells for a hard drop (the vertical path from the piece's spawn column down to landing). */
-function pieceTrails(falling: { type: string; x: number; y: number; r: number; hy?: number }): [number, number][] {
-  const cells: [number, number][] = [];
-  if (falling.hy === undefined) return cells;
-  const shape = PIECE_ROTATIONS[falling.type as keyof typeof PIECE_ROTATIONS][falling.r];
-  const startY = Math.floor(falling.y);
-  const landY = Math.floor(falling.hy);
-  for (const [cx] of shape) {
-    const bx = falling.x + cx;
-    for (let by = startY; by < landY; by++) {
-      const vy = by - BUFFER_ROWS;
-      if (vy >= 0) cells.push([bx, vy]);
-    }
-  }
-  return cells;
-}
-
-/** The visible-board rows that were cleared (from the engine's ClearResult). */
-function findClearedRows(lines: number, _preFalling: unknown, clearedRows?: number[]): number[] {
-  return clearedRows ?? [];
-}
-
 function defaultKeymap(): Record<string, string> {
   return {
     left: 'moveLeft', right: 'moveRight', down: 'softDrop',
@@ -292,55 +258,6 @@ function drawMiniBoard(buf: RenderBuffer, x: number, y: number, grid: BoardGrid,
   }
 }
 
-/** Compute visible-row cell positions for a falling piece (for lock flash). */
-function pieceCellsVisible(f: FallingPiece): [number, number][] {
-  const cells: [number, number][] = [];
-  const rotations = PIECE_ROTATIONS[f.type as keyof typeof PIECE_ROTATIONS];
-  if (!rotations) return cells;
-  for (const [cx, cy] of rotations[f.r]) {
-    const bx = f.x + cx;
-    const by = Math.floor(f.y) + cy - BUFFER_ROWS;
-    if (by >= 0 && bx >= 0) cells.push([bx, by]);
-  }
-  return cells;
-}
-
-/** Compute hard-drop trail columns: [col, startVisRow, endVisRow]. */
-function pieceTrails(f: FallingPiece): [number, number, number][] {
-  const rotations = PIECE_ROTATIONS[f.type as keyof typeof PIECE_ROTATIONS];
-  if (!rotations || f.hy === undefined) return [];
-  const colMinCy = new Map<number, number>();
-  for (const [cx, cy] of rotations[f.r]) {
-    const bx = f.x + cx;
-    const prev = colMinCy.get(bx);
-    if (prev === undefined || cy < prev) colMinCy.set(bx, cy);
-  }
-  const trails: [number, number, number][] = [];
-  const ghostVisY = Math.floor(f.hy) - BUFFER_ROWS;
-  for (const [col, minCy] of colMinCy) {
-    const endRow = ghostVisY + minCy;
-    const startRow = Math.max(0, endRow - 8);
-    if (startRow < endRow && col >= 0) trails.push([col, startRow, endRow]);
-  }
-  return trails;
-}
-
-/** Estimate which visible rows were cleared. */
-function findClearedRows(lineCount: number, f: FallingPiece | null): number[] {
-  if (!f) {
-    const rows: number[] = [];
-    for (let i = 0; i < lineCount; i++) rows.push(19 - i);
-    return rows;
-  }
-  const rotations = PIECE_ROTATIONS[f.type as keyof typeof PIECE_ROTATIONS];
-  if (!rotations) return [];
-  const rowSet = new Set<number>();
-  for (const [, cy] of rotations[f.r]) {
-    const by = Math.floor(f.y) + cy - BUFFER_ROWS;
-    if (by >= 0) rowSet.add(by);
-  }
-  return [...rowSet].sort((a, b) => b - a).slice(0, lineCount);
-}
 
 function clearText(lines: { kind: string; tspin: string; lines: number }): string {
   const names: Record<string, string> = { single: 'SINGLE', double: 'DOUBLE', triple: 'TRIPLE', tetris: 'TETRIS' };

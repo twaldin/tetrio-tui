@@ -29,28 +29,43 @@ class CellBuffer implements RenderBuffer {
   private idx(x: number, y: number): number { return y * this.width + x; }
 
   set(x: number, y: number, ch: string, style: Style = {}): void {
-    // Split multi-char strings into per-column cells so the diff loop is per-column-correct.
+    if (y < 0 || y >= this.height) return;
+    const fg = style.fg !== undefined ? rgbToNum(style.fg) : -2;
+    const bg = style.bg !== undefined ? rgbToNum(style.bg) : -2;
+    const attr = (style.bold ? ATTR_BOLD : 0) | (style.dim ? ATTR_DIM : 0) | (style.underline ? ATTR_UNDERLINE : 0) | (style.inverse ? ATTR_INVERSE : 0);
+    const rowOff = y * this.width;
     for (let i = 0; i < ch.length; i++) {
       const cx = x + i;
-      if (cx < 0 || y < 0 || cx >= this.width || y >= this.height) continue;
-      const c = this.cells[this.idx(cx, y)];
+      if (cx < 0 || cx >= this.width) continue;
+      const c = this.cells[rowOff + cx];
       c.ch = ch[i];
-      c.fg = style.fg !== undefined ? rgbToNum(style.fg) : c.fg;
-      c.bg = style.bg !== undefined ? rgbToNum(style.bg) : c.bg;
-      c.attr = (style.bold ? ATTR_BOLD : 0) | (style.dim ? ATTR_DIM : 0) | (style.underline ? ATTR_UNDERLINE : 0) | (style.inverse ? ATTR_INVERSE : 0);
+      if (fg !== -2) c.fg = fg;
+      if (bg !== -2) c.bg = bg;
+      c.attr = attr;
     }
   }
 
   fillRect(x: number, y: number, w: number, h: number, ch: string, style: Style = {}): void {
-    for (let row = y; row < y + h; row++) for (let col = x; col < x + w; col++) this.set(col, row, ch, style);
+    const fg = style.fg !== undefined ? rgbToNum(style.fg) : -2;
+    const bg = style.bg !== undefined ? rgbToNum(style.bg) : -2;
+    const attr = (style.bold ? ATTR_BOLD : 0) | (style.dim ? ATTR_DIM : 0) | (style.underline ? ATTR_UNDERLINE : 0) | (style.inverse ? ATTR_INVERSE : 0);
+    const x0 = Math.max(0, x), y0 = Math.max(0, y);
+    const x1 = Math.min(this.width, x + w), y1 = Math.min(this.height, y + h);
+    for (let row = y0; row < y1; row++) {
+      const rowOff = row * this.width;
+      for (let col = x0; col < x1; col++) {
+        const c = this.cells[rowOff + col];
+        c.ch = ch;
+        if (fg !== -2) c.fg = fg;
+        if (bg !== -2) c.bg = bg;
+        c.attr = attr;
+      }
+    }
   }
 
   drawText(x: number, y: number, text: string, style: Style = {}): void {
-    let cx = x;
-    for (const ch of text) {
-      this.set(cx, y, ch, style);
-      cx += 1;
-    }
+    // Fast path: pass full string to set() which handles multi-char
+    this.set(x, y, text, style);
   }
 
   drawBox(x: number, y: number, w: number, h: number, style: Style = {}): void {

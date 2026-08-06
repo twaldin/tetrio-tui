@@ -1,13 +1,16 @@
-/** Shared drawing helpers + TETR.IO-ish theme. */
+/** Shared drawing helpers + TETR.IO-ish theme (higher contrast). */
 import type { BoardGrid, Cell, PieceType } from '../types.js';
 import type { RenderBuffer, Style, RGB } from './app.js';
 
 export const THEME = {
-  bg: [10, 10, 18] as RGB,
-  panel: [24, 24, 40] as RGB,
-  border: [70, 70, 100] as RGB,
-  text: [220, 220, 235] as RGB,
-  dim: [130, 130, 160] as RGB,
+  bg: [8, 8, 14] as RGB,
+  panel: [20, 20, 34] as RGB,
+  panelAlt: [14, 14, 24] as RGB,
+  border: [110, 110, 150] as RGB,
+  borderBright: [150, 170, 220] as RGB,
+  text: [235, 235, 245] as RGB,
+  dim: [150, 150, 180] as RGB,
+  faint: [70, 70, 95] as RGB,
   accent: [255, 85, 200] as RGB,   // tetrio magenta
   accent2: [90, 200, 255] as RGB,  // tetrio cyan
   good: [120, 255, 140] as RGB,
@@ -17,27 +20,34 @@ export const THEME = {
   solo: [90, 120, 255] as RGB,
   channel: [90, 230, 120] as RGB,
   config: [90, 170, 255] as RGB,
+  // board cell shades (checkerboard)
+  boardA: [16, 16, 28] as RGB,
+  boardB: [22, 22, 36] as RGB,
+  gridLine: [40, 42, 60] as RGB,
 };
 
-/** Mino colors per piece type (TETR.IO-ish palette). */
+/** Mino colors per piece type (bright, high-contrast). */
 export const PIECE_COLORS: Record<string, RGB> = {
-  i: [60, 220, 240],
-  o: [240, 220, 60],
-  t: [200, 90, 240],
-  s: [80, 220, 90],
-  z: [240, 70, 80],
-  l: [240, 160, 50],
-  j: [80, 120, 240],
-  g: [110, 110, 120], // garbage
+  i: [80, 230, 250],
+  o: [250, 225, 70],
+  t: [210, 100, 250],
+  s: [90, 235, 100],
+  z: [250, 80, 90],
+  l: [250, 165, 60],
+  j: [95, 130, 250],
+  g: [120, 120, 132], // garbage
   ghost: [90, 90, 110],
 };
+
+/** Darker shade of a color (for the bottom half of a mino, adds depth). */
+function shade(c: RGB, f: number): RGB { return [Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)]; }
 
 export function pieceStyle(type: string, ghost = false): Style {
   const c = ghost ? PIECE_COLORS.ghost : (PIECE_COLORS[type] ?? PIECE_COLORS.g);
   return { fg: c };
 }
 
-/** Draw the playfield. Each mino = 2 chars wide. Returns the pixel width used. */
+/** Draw the playfield with a checkerboard grid. Each mino = 2 chars wide. Returns pixel width. */
 export function drawBoard(
   buf: RenderBuffer,
   x: number,
@@ -47,36 +57,49 @@ export function drawBoard(
 ): number {
   const h = grid.length;
   const w = grid[0]?.length ?? 10;
-  // frame
-  buf.fillRect(x, y, w * 2 + 2, h + 2, ' ', { bg: THEME.panel });
   for (let row = 0; row < h; row++) {
     for (let col = 0; col < w; col++) {
       const cell = grid[row][col];
       const ghostCell = opts.ghost?.[row]?.[col];
-      const px = x + 1 + col * 2;
-      const py = y + 1 + row;
+      const px = x + col * 2;
+      const py = y + row;
       if (cell) {
-        buf.set(px, py, '██', pieceStyle(cell));
+        // 2-tone mino: bright top, slightly darker bottom (reads as depth)
+        const c = PIECE_COLORS[cell] ?? PIECE_COLORS.g;
+        buf.set(px, py, '█', { fg: c });
+        buf.set(px + 1, py, '█', { fg: shade(c, 0.82) });
       } else if (ghostCell) {
-        buf.set(px, py, '░░', pieceStyle(ghostCell, true));
+        const c = PIECE_COLORS.ghost;
+        buf.set(px, py, '░', { fg: c });
+        buf.set(px + 1, py, '░', { fg: c });
       } else {
-        buf.set(px, py, '  ', {});
+        // checkerboard empty cells for readability
+        const bgc = (row + col) % 2 === 0 ? THEME.boardA : THEME.boardB;
+        buf.set(px, py, ' ', { bg: bgc });
+        buf.set(px + 1, py, ' ', { bg: bgc });
       }
     }
   }
-  return w * 2 + 2;
+  return w * 2;
 }
 
-/** Draw a single piece (e.g. hold or next preview) centered in a box. */
+/** Draw a piece preview centered in a box (hold / next). */
 export function drawPiecePreview(buf: RenderBuffer, x: number, y: number, type: PieceType | null): void {
-  buf.fillRect(x, y, 10, 5, ' ', { bg: THEME.panel });
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) buf.set(x + c, y + r, ' ', { bg: THEME.panel });
   if (!type) return;
   const shape = PIECE_SHAPES[type];
   if (!shape) return;
-  const st = pieceStyle(type);
-  for (let r = 0; r < shape.length; r++) {
-    for (let c = 0; c < shape[r].length; c++) {
-      if (shape[r][c]) buf.set(x + 1 + c * 2, y + 1 + r, '██', st);
+  const c = PIECE_COLORS[type];
+  const cd = shade(c, 0.82);
+  const rows = shape.length, cols = shape[0].length;
+  const ox = Math.max(0, Math.floor((8 - cols * 2) / 2));
+  const oy = Math.max(0, Math.floor((4 - rows) / 2));
+  for (let r = 0; r < rows; r++) {
+    for (let cc = 0; cc < cols; cc++) {
+      if (shape[r][cc]) {
+        buf.set(x + ox + cc * 2, y + oy + r, '█', { fg: c });
+        buf.set(x + ox + cc * 2 + 1, y + oy + r, '█', { fg: cd });
+      }
     }
   }
 }
@@ -90,6 +113,16 @@ export const PIECE_SHAPES: Record<string, number[][]> = {
   l: [[0,0,1],[1,1,1],[0,0,0]],
   j: [[1,0,0],[1,1,1],[0,0,0]],
 };
+
+/** Draw a panel box with a title in the top border. */
+export function drawPanel(buf: RenderBuffer, x: number, y: number, w: number, h: number, title: string, opts: { color?: RGB; fill?: boolean } = {}): void {
+  const color = opts.color ?? THEME.border;
+  if (opts.fill !== false) buf.fillRect(x, y, w, h, ' ', { bg: THEME.panel });
+  drawBox(buf, x, y, w, h, { fg: color });
+  if (title) {
+    buf.drawText(x + 2, y, ` ${title} `, { fg: THEME.dim, bg: THEME.panel });
+  }
+}
 
 export function drawBox(buf: RenderBuffer, x: number, y: number, w: number, h: number, style?: Style): void {
   if (buf.drawBox) { buf.drawBox(x, y, w, h, style); return; }

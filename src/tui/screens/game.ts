@@ -3,7 +3,7 @@
  * Used for versus (league/custom) AND offline practice (solo modes).
  */
 import type { RenderBuffer, Screen, KeyEvent } from '../app.js';
-import { THEME, PIECE_COLORS, drawBoard, drawPiecePreview, drawBox, center } from '../draw.js';
+import { THEME, PIECE_COLORS, drawBoard, drawPiecePreview, drawBox, drawPanel, center } from '../draw.js';
 import { LocalGameController } from '../../game/localgame.js';
 import { OpponentTracker } from '../../game/state.js';
 import { visibleBoard, BUFFER_ROWS } from '../../game/engine.js';
@@ -109,89 +109,93 @@ export class GameScreen implements Screen {
     const engine = this.ctrl.engine;
     if (!engine) { center(buf, 10, 'no game', { fg: THEME.dim }); return; }
 
-    // shake offset
-    const sx = this.shakeFrames > 0 ? (this.frame % 2 === 0 ? 1 : -1) * Math.min(2, this.shakeFrames) : 0;
-    const sy = 0;
-
     const s = engine.state;
     const board = visibleBoard(s.board);
     const bw = s.options.boardwidth ?? 10;
     const bh = s.options.boardheight ?? 20;
-    const boardW = bw * 2 + 2;
-
-    // layout: if opponents exist, my board goes left and opponents fill the right; else center it.
+    const boardW = bw * 2;
     const hasOpponents = this.opponents.views.size > 0;
-    const myX = hasOpponents
-      ? Math.floor(buf.width / 2) - boardW - 14 + sx
-      : Math.floor(buf.width / 2) - Math.floor(boardW / 2) + 8 + sx;
-    const myY = 2 + sy;
 
-    // hold box
-    drawBox(buf, myX - 12, myY, 11, 5, { fg: THEME.border });
-    buf.drawText(myX - 11, myY, 'HOLD', { fg: THEME.dim });
-    drawPiecePreview(buf, myX - 11, myY + 1, s.hold.piece);
+    // shake offset
+    const sx = this.shakeFrames > 0 ? (this.frame % 2 === 0 ? 1 : -1) * Math.min(2, this.shakeFrames) : 0;
 
-    // stats under hold
+    // layout: hold/stats left, board center, next right, opponents far right
+    const panelW = 13;
+    const totalW = panelW + 2 + boardW + 2 + panelW + 2 + (hasOpponents ? 14 : 0);
+    const startX = Math.max(1, Math.floor((buf.width - totalW) / 2));
+    const boardX = startX + panelW + 2 + sx;
+    const boardY = Math.max(2, Math.floor((buf.height - bh) / 2) - 1);
+
+    // title + timer
+    center(buf, boardY - 2, this.modeLabel, { fg: THEME.accent, bold: true });
     const st = s.stats;
-    drawBox(buf, myX - 12, myY + 6, 11, 9, { fg: THEME.border });
-    buf.drawText(myX - 11, myY + 6, 'STATS', { fg: THEME.dim });
-    buf.drawText(myX - 11, myY + 8, `APM ${st.apm.toFixed(0)}`, { fg: THEME.text });
-    buf.drawText(myX - 11, myY + 9, `PPS ${st.pps.toFixed(1)}`, { fg: THEME.text });
-    buf.drawText(myX - 11, myY + 10, `VS ${st.vsscore.toFixed(0)}`, { fg: THEME.text });
-    buf.drawText(myX - 11, myY + 11, `ATK ${st.garbage.attack}`, { fg: THEME.accent });
-    buf.drawText(myX - 11, myY + 12, `SNT ${st.garbage.sent}`, { fg: THEME.good });
+    const secs = Math.floor(st.currentTime / 60);
+    center(buf, boardY - 1, formatTime(secs), { fg: THEME.dim });
 
-    // main board with ghost
+    // HOLD panel
+    drawPanel(buf, startX, boardY, panelW, 7, 'HOLD');
+    drawPiecePreview(buf, startX + 2, boardY + 2, s.hold.piece);
+
+    // STATS panel
+    drawPanel(buf, startX, boardY + 8, panelW, 11, 'STATS');
+    const sx2 = startX + 2;
+    buf.drawText(sx2, boardY + 10, 'APM', { fg: THEME.dim });
+    buf.drawText(sx2 + 6, boardY + 10, st.apm.toFixed(0), { fg: THEME.text, bold: true });
+    buf.drawText(sx2, boardY + 11, 'PPS', { fg: THEME.dim });
+    buf.drawText(sx2 + 6, boardY + 11, st.pps.toFixed(2), { fg: THEME.text, bold: true });
+    buf.drawText(sx2, boardY + 12, 'VS', { fg: THEME.dim });
+    buf.drawText(sx2 + 6, boardY + 12, st.vsscore.toFixed(0), { fg: THEME.text, bold: true });
+    buf.drawText(sx2, boardY + 14, 'ATK', { fg: THEME.dim });
+    buf.drawText(sx2 + 6, boardY + 14, `${st.garbage.attack}`, { fg: THEME.accent, bold: true });
+    buf.drawText(sx2, boardY + 15, 'SNT', { fg: THEME.dim });
+    buf.drawText(sx2 + 6, boardY + 15, `${st.garbage.sent}`, { fg: THEME.good, bold: true });
+    buf.drawText(sx2, boardY + 16, 'RCV', { fg: THEME.dim });
+    buf.drawText(sx2 + 6, boardY + 16, `${st.garbage.received}`, { fg: THEME.bad, bold: true });
+
+    // main board: strong border + checkerboard interior
+    drawBox(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, { fg: THEME.borderBright });
     const ghost = computeGhost(board, s.falling);
-    drawBoard(buf, myX, myY, board, { ghost });
-    drawBox(buf, myX - 1, myY - 1, boardW + 1, bh + 2, { fg: THEME.accent2 });
+    drawBoard(buf, boardX, boardY, board, { ghost });
 
-    // next queue
-    drawBox(buf, myX + boardW + 1, myY, 11, 5 * 5 + 1, { fg: THEME.border });
-    buf.drawText(myX + boardW + 2, myY, 'NEXT', { fg: THEME.dim });
+    // NEXT panel
+    const nextX = boardX + boardW + 2;
+    drawPanel(buf, nextX, boardY, panelW, 22, 'NEXT');
     const next = s.bag.slice(0, 5);
-    next.forEach((p, i) => drawPiecePreview(buf, myX + boardW + 2, myY + 1 + i * 5, p));
+    next.forEach((p, i) => drawPiecePreview(buf, nextX + 2, boardY + 2 + i * 4, p));
 
-    // garbage incoming indicator (left of board)
+    // garbage incoming indicator (left edge of board)
     const incoming = s.garbage.incoming?.length ?? 0;
     if (incoming > 0) {
-      for (let i = 0; i < Math.min(incoming, 20); i++) {
-        buf.set(myX - 1, myY + bh - i, '▮', { fg: THEME.bad });
+      for (let i = 0; i < Math.min(incoming, bh); i++) {
+        buf.set(boardX - 2, boardY + bh - 1 - i, '▮', { fg: THEME.bad });
       }
     }
 
-    // combo / b2b indicators
-    if (s.combo > 1) buf.drawText(myX, myY + bh + 2, `COMBO x${s.combo - 1}`, { fg: THEME.warn, bold: true });
-    if (s.btb > 1) buf.drawText(myX + 14, myY + bh + 2, `B2B x${s.btb - 1}`, { fg: THEME.accent, bold: true });
+    // combo / b2b
+    if (s.combo > 1) buf.drawText(boardX, boardY + bh + 2, `COMBO x${s.combo - 1}`, { fg: THEME.warn, bold: true });
+    if (s.btb > 1) buf.drawText(boardX + 12, boardY + bh + 2, `B2B x${s.btb - 1}`, { fg: THEME.accent, bold: true });
 
-    // opponents (small boards on the right)
-    let ox = myX + boardW + 14;
+    // opponents (right of NEXT)
+    let ox = nextX + panelW + 2;
     for (const view of this.opponents.views.values()) {
       if (ox + 12 > buf.width) break;
       const vb = view.board ? visibleBoard(view.board) : null;
-      if (vb) drawMiniBoard(buf, ox, myY, vb, view.alive);
-      buf.drawText(ox, myY + 21, (view.username ?? 'opp').slice(0, 11), { fg: view.alive ? THEME.dim : THEME.bad });
+      if (vb) drawMiniBoard(buf, ox, boardY, vb, view.alive);
+      buf.drawText(ox, boardY + 21, (view.username ?? 'opp').slice(0, 11), { fg: view.alive ? THEME.dim : THEME.bad });
       ox += 13;
     }
 
-    // mode label + time
-    center(buf, 0, this.modeLabel, { fg: THEME.accent, bold: true });
-    const secs = Math.floor(st.currentTime / 60);
-    center(buf, 1, formatTime(secs), { fg: THEME.dim });
-
     // effects overlay (floating text)
-    let ey = myY + 8;
+    let ey = boardY + 8;
     for (const e of this.effects) {
       if (!e.text) continue;
       const age = this.frame - e.frame;
-      const alpha = 1 - age / 60;
       const color = e.kind === 'allclear' ? THEME.good : e.kind === 'attack' ? THEME.accent : THEME.warn;
       center(buf, ey, e.text + (e.amount ? ` +${e.amount}` : ''), { fg: color, bold: true });
       ey += 1;
     }
 
-    // controls hint
-    center(buf, buf.height - 2, 'esc forfeit', { fg: THEME.dim });
+    center(buf, buf.height - 2, 'esc forfeit', { fg: THEME.faint });
   }
 }
 

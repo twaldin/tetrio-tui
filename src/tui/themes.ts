@@ -26,20 +26,37 @@ export interface Theme {
   /** Display name shown in the config UI. */
   name: string;
 
-  // --- UI chrome ---
+  // --- Background depth layers (brief-aligned) ---
+  base: RGB;           // Deepest background (= bg)
+  mantle: RGB;         // Panel fill (= panel)
+  surface: RGB;        // Elevated elements
+  overlay: RGB;        // Popups, modals
+
+  // --- Legacy aliases (same values, kept for screen compat) ---
   bg: RGB;
   panel: RGB;
   panelAlt: RGB;
+
+  // --- Borders ---
   border: RGB;
   borderBright: RGB;
+  borderActive: RGB;   // Focused panel border
+  borderSubtle: RGB;   // Very faint dividers
+  boardFrame: RGB;     // Board border (double-line ═║)
+
+  // --- Text hierarchy ---
   text: RGB;
+  subtext: RGB;        // Secondary labels
   dim: RGB;
   faint: RGB;
+
+  // --- Semantic accents ---
   accent: RGB;
   accent2: RGB;
   good: RGB;
   warn: RGB;
   bad: RGB;
+  info: RGB;
 
   // --- section colors (menu items, breadcrumbs) ---
   league: RGB;
@@ -51,6 +68,12 @@ export interface Theme {
   boardA: RGB;
   boardB: RGB;
   gridLine: RGB;
+
+  // --- Game-specific ---
+  ghost: RGB;          // Ghost piece shade
+  garbage: RGB;        // Garbage row color
+  lockFlash: RGB;      // Momentary flash on piece lock
+  clearFlash: RGB;     // Line clear flash color
 
   // --- pieces ---
   pieces: PieceColors;
@@ -99,6 +122,19 @@ const TETRIO_DEFAULT: Theme = {
     g: rgb(120, 120, 132),
     ghost: rgb(70, 70, 95),
   },
+  base: rgb(8, 8, 14),
+  mantle: rgb(14, 14, 24),
+  surface: rgb(20, 20, 34),
+  overlay: rgb(30, 30, 48),
+  boardFrame: rgb(150, 170, 220),
+  borderActive: rgb(150, 170, 220),
+  borderSubtle: rgb(45, 45, 65),
+  subtext: rgb(180, 180, 200),
+  info: rgb(90, 130, 255),
+  ghost: rgb(70, 70, 95),
+  garbage: rgb(120, 120, 132),
+  lockFlash: rgb(255, 255, 255),
+  clearFlash: rgb(255, 255, 255),
 };
 
 const TOKYO_NIGHT: Theme = {
@@ -134,6 +170,19 @@ const TOKYO_NIGHT: Theme = {
     g: rgb(100, 106, 140),
     ghost: rgb(55, 60, 85),
   },
+  base: rgb(26, 27, 38),
+  mantle: rgb(22, 22, 30),
+  surface: rgb(36, 40, 59),
+  overlay: rgb(52, 59, 88),
+  boardFrame: rgb(125, 133, 174),
+  borderActive: rgb(122, 162, 247),
+  borderSubtle: rgb(41, 46, 66),
+  subtext: rgb(156, 163, 194),
+  info: rgb(122, 162, 247),
+  ghost: rgb(55, 60, 85),
+  garbage: rgb(100, 106, 140),
+  lockFlash: rgb(255, 255, 255),
+  clearFlash: rgb(192, 202, 245),
 };
 
 const CATPPUCCIN_MOCHA: Theme = {
@@ -169,6 +218,19 @@ const CATPPUCCIN_MOCHA: Theme = {
     g: rgb(108, 112, 134),
     ghost: rgb(63, 64, 82),
   },
+  base: rgb(30, 30, 46),
+  mantle: rgb(24, 24, 37),
+  surface: rgb(49, 50, 68),
+  overlay: rgb(69, 71, 90),
+  boardFrame: rgb(166, 173, 200),
+  borderActive: rgb(137, 180, 250),
+  borderSubtle: rgb(49, 50, 68),
+  subtext: rgb(186, 194, 222),
+  info: rgb(137, 180, 250),
+  ghost: rgb(63, 64, 82),
+  garbage: rgb(108, 112, 134),
+  lockFlash: rgb(255, 255, 255),
+  clearFlash: rgb(205, 214, 244),
 };
 
 const GRUVBOX: Theme = {
@@ -204,6 +266,19 @@ const GRUVBOX: Theme = {
     g: rgb(124, 111, 100),
     ghost: rgb(70, 65, 60),
   },
+  base: rgb(40, 40, 40),
+  mantle: rgb(29, 32, 33),
+  surface: rgb(60, 56, 54),
+  overlay: rgb(80, 73, 69),
+  boardFrame: rgb(213, 196, 161),
+  borderActive: rgb(215, 153, 33),
+  borderSubtle: rgb(60, 56, 54),
+  subtext: rgb(189, 174, 147),
+  info: rgb(131, 165, 152),
+  ghost: rgb(70, 65, 60),
+  garbage: rgb(124, 111, 100),
+  lockFlash: rgb(235, 219, 178),
+  clearFlash: rgb(250, 189, 47),
 };
 
 const NORD: Theme = {
@@ -239,6 +314,19 @@ const NORD: Theme = {
     g: rgb(105, 116, 132),
     ghost: rgb(60, 67, 80),
   },
+  base: rgb(46, 52, 64),
+  mantle: rgb(41, 46, 56),
+  surface: rgb(59, 66, 82),
+  overlay: rgb(76, 86, 106),
+  boardFrame: rgb(216, 222, 233),
+  borderActive: rgb(136, 192, 208),
+  borderSubtle: rgb(59, 66, 82),
+  subtext: rgb(216, 222, 233),
+  info: rgb(129, 161, 193),
+  ghost: rgb(60, 67, 80),
+  garbage: rgb(105, 116, 132),
+  lockFlash: rgb(236, 239, 244),
+  clearFlash: rgb(236, 239, 244),
 };
 
 const DRACULA: Theme = {
@@ -274,6 +362,19 @@ const DRACULA: Theme = {
     g: rgb(108, 112, 134),
     ghost: rgb(58, 60, 78),
   },
+  base: rgb(40, 42, 54),
+  mantle: rgb(33, 34, 44),
+  surface: rgb(68, 71, 90),
+  overlay: rgb(98, 114, 164),
+  boardFrame: rgb(248, 248, 242),
+  borderActive: rgb(255, 121, 198),
+  borderSubtle: rgb(68, 71, 90),
+  subtext: rgb(189, 147, 249),
+  info: rgb(189, 147, 249),
+  ghost: rgb(58, 60, 78),
+  garbage: rgb(108, 112, 134),
+  lockFlash: rgb(248, 248, 242),
+  clearFlash: rgb(241, 250, 140),
 };
 
 const SOLARIZED_DARK: Theme = {
@@ -309,6 +410,19 @@ const SOLARIZED_DARK: Theme = {
     g: rgb(88, 110, 117),
     ghost: rgb(34, 68, 78),
   },
+  base: rgb(0, 43, 54),
+  mantle: rgb(0, 34, 43),
+  surface: rgb(7, 54, 66),
+  overlay: rgb(88, 110, 117),
+  boardFrame: rgb(147, 161, 161),
+  borderActive: rgb(38, 139, 210),
+  borderSubtle: rgb(7, 54, 66),
+  subtext: rgb(238, 232, 213),
+  info: rgb(38, 139, 210),
+  ghost: rgb(34, 68, 78),
+  garbage: rgb(88, 110, 117),
+  lockFlash: rgb(253, 246, 227),
+  clearFlash: rgb(253, 246, 227),
 };
 
 const MONOKAI: Theme = {
@@ -344,6 +458,19 @@ const MONOKAI: Theme = {
     g: rgb(116, 112, 118),
     ghost: rgb(60, 57, 62),
   },
+  base: rgb(45, 42, 46),
+  mantle: rgb(37, 34, 38),
+  surface: rgb(57, 53, 58),
+  overlay: rgb(72, 68, 73),
+  boardFrame: rgb(199, 199, 195),
+  borderActive: rgb(255, 216, 102),
+  borderSubtle: rgb(57, 53, 58),
+  subtext: rgb(199, 199, 195),
+  info: rgb(171, 157, 242),
+  ghost: rgb(60, 57, 62),
+  garbage: rgb(116, 112, 118),
+  lockFlash: rgb(252, 252, 250),
+  clearFlash: rgb(255, 216, 102),
 };
 
 // ---------------------------------------------------------------------------

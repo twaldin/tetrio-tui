@@ -4,6 +4,7 @@
  */
 import type { RenderBuffer, Screen, KeyEvent } from '../app.js';
 import { THEME, PIECE_COLORS, drawBoard, drawPiecePreview, drawBox, drawBoardBorder, drawPanel, center, pieceColor } from '../draw.js';
+import { theme } from '../themes.js';
 import { LocalGameController } from '../../game/localgame.js';
 import { OpponentTracker } from '../../game/state.js';
 import { visibleBoard, BUFFER_ROWS } from '../../game/engine.js';
@@ -109,9 +110,10 @@ export class GameScreen implements Screen {
   }
 
   render(buf: RenderBuffer): void {
-    buf.fillRect(0, 0, buf.width, buf.height, ' ', { bg: THEME.bg });
+    const t = theme();
+    buf.fillRect(0, 0, buf.width, buf.height, ' ', { bg: t.bg });
     const engine = this.ctrl.engine;
-    if (!engine) { center(buf, 10, 'no game', { fg: THEME.dim }); return; }
+    if (!engine) { center(buf, 10, 'no game', { fg: t.dim }); return; }
 
     const s = engine.state;
     const board = visibleBoard(s.board);
@@ -131,10 +133,10 @@ export class GameScreen implements Screen {
     const boardY = Math.max(2, Math.floor((buf.height - bh) / 2) - 1);
 
     // title + timer
-    center(buf, boardY - 2, this.modeLabel, { fg: THEME.accent, bold: true });
+    center(buf, boardY - 2, this.modeLabel, { fg: t.accent, bold: true });
     const st = s.stats;
     const secs = Math.floor(st.currentTime / 60);
-    center(buf, boardY - 1, formatTime(secs), { fg: THEME.dim });
+    center(buf, boardY - 1, formatTime(secs), { fg: t.dim });
 
     // HOLD panel
     drawPanel(buf, startX, boardY, panelW, 7, 'HOLD');
@@ -143,21 +145,21 @@ export class GameScreen implements Screen {
     // STATS panel
     drawPanel(buf, startX, boardY + 8, panelW, 11, 'STATS');
     const sx2 = startX + 2;
-    buf.drawText(sx2, boardY + 10, 'APM', { fg: THEME.dim });
-    buf.drawText(sx2 + 6, boardY + 10, st.apm.toFixed(0), { fg: THEME.text, bold: true });
-    buf.drawText(sx2, boardY + 11, 'PPS', { fg: THEME.dim });
-    buf.drawText(sx2 + 6, boardY + 11, st.pps.toFixed(2), { fg: THEME.text, bold: true });
-    buf.drawText(sx2, boardY + 12, 'VS', { fg: THEME.dim });
-    buf.drawText(sx2 + 6, boardY + 12, st.vsscore.toFixed(0), { fg: THEME.text, bold: true });
-    buf.drawText(sx2, boardY + 14, 'ATK', { fg: THEME.dim });
-    buf.drawText(sx2 + 6, boardY + 14, `${st.garbage.attack}`, { fg: THEME.accent, bold: true });
-    buf.drawText(sx2, boardY + 15, 'SNT', { fg: THEME.dim });
-    buf.drawText(sx2 + 6, boardY + 15, `${st.garbage.sent}`, { fg: THEME.good, bold: true });
-    buf.drawText(sx2, boardY + 16, 'RCV', { fg: THEME.dim });
-    buf.drawText(sx2 + 6, boardY + 16, `${st.garbage.received}`, { fg: THEME.bad, bold: true });
+    buf.drawText(sx2, boardY + 10, 'APM', { fg: t.dim });
+    buf.drawText(sx2 + 6, boardY + 10, st.apm.toFixed(0), { fg: t.text, bold: true });
+    buf.drawText(sx2, boardY + 11, 'PPS', { fg: t.dim });
+    buf.drawText(sx2 + 6, boardY + 11, st.pps.toFixed(2), { fg: t.text, bold: true });
+    buf.drawText(sx2, boardY + 12, 'VS', { fg: t.dim });
+    buf.drawText(sx2 + 6, boardY + 12, st.vsscore.toFixed(0), { fg: t.text, bold: true });
+    buf.drawText(sx2, boardY + 14, 'ATK', { fg: t.dim });
+    buf.drawText(sx2 + 6, boardY + 14, `${st.garbage.attack}`, { fg: t.accent, bold: true });
+    buf.drawText(sx2, boardY + 15, 'SNT', { fg: t.dim });
+    buf.drawText(sx2 + 6, boardY + 15, `${st.garbage.sent}`, { fg: t.good, bold: true });
+    buf.drawText(sx2, boardY + 16, 'RCV', { fg: t.dim });
+    buf.drawText(sx2 + 6, boardY + 16, `${st.garbage.received}`, { fg: t.bad, bold: true });
 
     // main board: strong border + checkerboard interior
-    drawBoardBorder(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, { fg: THEME.borderBright });
+    drawBoardBorder(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, { fg: t.borderBright });
     const ghostSet = computeGhostSet(s.falling);
     drawBoard(buf, boardX, boardY, board, { ghostSet });
 
@@ -171,13 +173,13 @@ export class GameScreen implements Screen {
     const incoming = s.garbage.incoming?.length ?? 0;
     if (incoming > 0) {
       for (let i = 0; i < Math.min(incoming, bh); i++) {
-        buf.set(boardX - 2, boardY + bh - 1 - i, '▮', { fg: THEME.bad });
+        buf.set(boardX - 2, boardY + bh - 1 - i, '▮', { fg: t.bad });
       }
     }
 
     // combo / b2b
-    if (s.combo > 1) buf.drawText(boardX, boardY + bh + 2, `COMBO x${s.combo - 1}`, { fg: THEME.warn, bold: true });
-    if (s.btb > 1) buf.drawText(boardX + 12, boardY + bh + 2, `B2B x${s.btb - 1}`, { fg: THEME.accent, bold: true });
+    if (s.combo > 1) buf.drawText(boardX, boardY + bh + 2, `COMBO x${s.combo - 1}`, { fg: t.warn, bold: true });
+    if (s.btb > 1) buf.drawText(boardX + 12, boardY + bh + 2, `B2B x${s.btb - 1}`, { fg: t.accent, bold: true });
 
     // opponents (right of NEXT)
     let ox = nextX + panelW + 2;
@@ -185,7 +187,7 @@ export class GameScreen implements Screen {
       if (ox + 12 > buf.width) break;
       const vb = view.board ? visibleBoard(view.board) : null;
       if (vb) drawMiniBoard(buf, ox, boardY, vb, view.alive);
-      buf.drawText(ox, boardY + 21, (view.username ?? 'opp').slice(0, 11), { fg: view.alive ? THEME.dim : THEME.bad });
+      buf.drawText(ox, boardY + 21, (view.username ?? 'opp').slice(0, 11), { fg: view.alive ? t.dim : t.bad });
       ox += 13;
     }
 
@@ -194,12 +196,12 @@ export class GameScreen implements Screen {
     for (const e of this.effects) {
       if (!e.text) continue;
       const age = this.frame - e.frame;
-      const color = e.kind === 'allclear' ? THEME.good : e.kind === 'attack' ? THEME.accent : THEME.warn;
+      const color = e.kind === 'allclear' ? t.good : e.kind === 'attack' ? t.accent : t.warn;
       center(buf, ey, e.text + (e.amount ? ` +${e.amount}` : ''), { fg: color, bold: true });
       ey += 1;
     }
 
-    center(buf, buf.height - 2, 'esc forfeit', { fg: THEME.faint });
+    center(buf, buf.height - 2, 'esc forfeit', { fg: t.faint });
   }
 }
 
@@ -226,14 +228,14 @@ function computeGhostSet(falling: any): Set<number> | null {
 }
 
 function drawMiniBoard(buf: RenderBuffer, x: number, y: number, grid: BoardGrid, alive: boolean): void {
-  // 1-wide minoes for opponents
+  const t = theme();
   const h = Math.min(20, grid.length);
   const w = grid[0]?.length ?? 10;
-  drawBox(buf, x - 1, y - 1, w + 2, h + 2, { fg: alive ? THEME.border : THEME.bad });
+  drawBox(buf, x - 1, y - 1, w + 2, h + 2, { fg: alive ? t.border : t.bad });
   for (let row = 0; row < h; row++) {
     for (let col = 0; col < w; col++) {
       const c = grid[row][col];
-      buf.set(x + col, y + row, c ? '█' : ' ', c ? { fg: PIECE_COLORS[c] ?? PIECE_COLORS.g } : {});
+      buf.set(x + col, y + row, c ? '█' : ' ', c ? { fg: pieceColor(c) } : {});
     }
   }
 }

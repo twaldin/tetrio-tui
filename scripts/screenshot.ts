@@ -4,8 +4,11 @@ import * as fs from 'fs';
 async function main() {
   const outPath = process.argv[2] ?? '/tmp/tui_shot.png';
   const mode = process.argv[3] ?? 'game';
+  const themeName = process.argv[4] ?? process.env.TETRIO_THEME ?? '';
+  const appArgs = ['tsx', 'src/index.ts', '--guest', 'pilotdemo'];
+  if (themeName) appArgs.push('--theme', themeName);
   const term = await launchTerminal({
-    command: 'npx', args: ['tsx', 'src/index.ts', '--guest', 'pilotdemo'],
+    command: 'npx', args: appArgs,
     cols: 110, rows: 34, cwd: process.cwd(),
     env: { FORCE_COLOR: undefined, NO_COLOR: undefined } as any,
     waitForDataTimeout: 15000,

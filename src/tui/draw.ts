@@ -57,16 +57,29 @@ export function pieceStyle(type: string, ghost = false): Style {
  * (▌ with shade fg on base bg). This reads as a clean bevel without the
  * jarring 2-tone split.
  */
+/** Pre-computed board styles: piece mino left/right, ghost, empties, panel bg. */
+let _bc: {
+  ml: Record<string, Style>; mr: Record<string, Style>;
+  gl: Style; gr: Style; ea: Style; eb: Style; pb: Style;
+  _t: Theme;
+} | null = null;
+function bc(): NonNullable<typeof _bc> {
+  const t = theme();
+  if (_bc && _bc._t === t) return _bc;
+  const p = t.pieces;
+  const keys = ['i','o','t','s','z','l','j','g'] as const;
+  const ml: Record<string, Style> = {};
+  const mr: Record<string, Style> = {};
+  for (const k of keys) { ml[k] = { fg: tint(p[k], 0.25), bg: p[k] }; mr[k] = { fg: shade(p[k], 0.72), bg: p[k] }; }
+  const gc = p.ghost, gs5 = shade(gc, 0.5);
+  _bc = { ml, mr, gl: { fg: tint(gc, 0.3), bg: gs5 }, gr: { fg: shade(gc, 0.3), bg: gs5 },
+    ea: { bg: t.boardA }, eb: { bg: t.boardB }, pb: { bg: t.panel }, _t: t };
+  return _bc;
+}
+
 function drawMino(buf: RenderBuffer, px: number, py: number, c: RGB): void {
-  // Use solid blocks with the base color as fg, with a subtle inner bevel
-  // achieved by making the left char show a thin highlight line and the
-  // right char show a thin shadow.
-  const hi = tint(c, 0.25);    // highlight
-  const lo = shade(c, 0.72);   // shadow
-  // Left cell: '▐' draws the RIGHT half filled. fg=highlight, bg=base → thin bright left edge
-  buf.set(px, py, '▐', { fg: hi, bg: c });
-  // Right cell: '▌' draws the LEFT half filled. fg=shadow, bg=base → thin dark right edge  
-  buf.set(px + 1, py, '▌', { fg: lo, bg: c });
+  buf.set(px, py, '▐', { fg: tint(c, 0.25), bg: c });
+  buf.set(px + 1, py, '▌', { fg: shade(c, 0.72), bg: c });
 }
 
 /** Draw the playfield with a checkerboard grid. Each mino = 2 chars wide. */
@@ -77,27 +90,25 @@ export function drawBoard(
   grid: BoardGrid,
   opts: { ghostSet?: Set<number> | null; width?: number; height?: number } = {},
 ): number {
-  const t = theme();
   const h = grid.length;
   const w = grid[0]?.length ?? 10;
   const gs = opts.ghostSet;
+  const c = bc();
   for (let row = 0; row < h; row++) {
     for (let col = 0; col < w; col++) {
       const cell = grid[row][col];
       const px = x + col * 2;
       const py = y + row;
       if (cell) {
-        const c = pieceColor(cell);
-        drawMino(buf, px, py, c);
+        buf.set(px, py, '▐', c.ml[cell] ?? c.ml.g);
+        buf.set(px + 1, py, '▌', c.mr[cell] ?? c.mr.g);
       } else if (gs && gs.has(row * 256 + col)) {
-        const c = t.pieces.ghost;
-        buf.set(px, py, '▐', { fg: tint(c, 0.3), bg: shade(c, 0.5) });
-        buf.set(px + 1, py, '▌', { fg: shade(c, 0.3), bg: shade(c, 0.5) });
+        buf.set(px, py, '▐', c.gl);
+        buf.set(px + 1, py, '▌', c.gr);
       } else {
-        // checkerboard empty cells
-        const bgc = (row + col) % 2 === 0 ? t.boardA : t.boardB;
-        buf.set(px, py, ' ', { bg: bgc });
-        buf.set(px + 1, py, ' ', { bg: bgc });
+        const s = (row + col) % 2 === 0 ? c.ea : c.eb;
+        buf.set(px, py, ' ', s);
+        buf.set(px + 1, py, ' ', s);
       }
     }
   }
@@ -120,19 +131,21 @@ export const PIECE_SHAPES: Record<string, number[][]> = {
 
 /** Draw a piece preview centered in a box (hold / next). */
 export function drawPiecePreview(buf: RenderBuffer, x: number, y: number, type: PieceType | null): void {
-  const t = theme();
-  for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) buf.set(x + c, y + r, ' ', { bg: t.panel });
+  const cc = bc();
+  for (let r = 0; r < 4; r++) for (let col = 0; col < 8; col++) buf.set(x + col, y + r, ' ', cc.pb);
   if (!type) return;
   const shape = PIECE_SHAPES[type];
   if (!shape) return;
-  const c = pieceColor(type);
+  const ml = cc.ml[type] ?? cc.ml.g;
+  const mr = cc.mr[type] ?? cc.mr.g;
   const rows = shape.length, cols = shape[0].length;
   const ox = Math.max(0, Math.floor((8 - cols * 2) / 2));
   const oy = Math.max(0, Math.floor((4 - rows) / 2));
   for (let r = 0; r < rows; r++) {
-    for (let cc = 0; cc < cols; cc++) {
-      if (shape[r][cc]) {
-        drawMino(buf, x + ox + cc * 2, y + oy + r, c);
+    for (let c = 0; c < cols; c++) {
+      if (shape[r][c]) {
+        buf.set(x + ox + c * 2, y + oy + r, '▐', ml);
+        buf.set(x + ox + c * 2 + 1, y + oy + r, '▌', mr);
       }
     }
   }

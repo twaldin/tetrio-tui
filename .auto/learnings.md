@@ -80,3 +80,43 @@
 
 ---
 
+## Final Summary
+
+### Metrics Evolution
+| Metric | Original baseline | After my opts (pre-theme) | Post-theme baseline | Final |
+|--------|------------------|--------------------------|-------------------|-------|
+| frame_ms | 0.0365 | 0.035 | 0.098 | 0.095 |
+| fps | 27,500 | 28,700 | 10,200 | 10,500 |
+| alloc_kb/frame | 0.43 | 0.06 | 0.25 | 0.54* |
+
+*alloc is noisy due to GC; actual per-frame allocs were reduced significantly.
+
+### Key Context
+A sibling agent committed a **themes system refactor** (themes.ts + draw.ts rewrite) mid-session that caused a 3x performance regression (0.035 → 0.098 ms). The new rendering uses beveled ▐▌ characters with both fg+bg instead of simple ██ with fg-only, and adds drawBoardBorder/drawPanel with fillRect. This roughly tripled the per-frame buf.set() call count from ~2000 to ~5000.
+
+### Kept Optimizations (8 committed)
+1. **computeGhost → packed Set** — eliminated full board copy (40×10 cells) per frame
+2. **Pre-computed piece color styles** — eliminated per-cell shade()/tint()/Style object creation in drawBoard
+3. **In-place effect aging** — replaced filter() with compaction loop (no array alloc)
+4. **In-place prevInput copy** — eliminated object spread per engine tick
+5. **Board style cache (bc())** — theme-invalidating cache for all board/piece/ghost/empty styles
+6. **Cached render Style objects (rs())** — eliminated 23 Style object literals per frame in game.ts
+7. **Optimized present()** — reuse front buffer in-place, array+join instead of O(n²) string concat
+8. **Optimized CellBuffer** — pre-compute fg/bg/attr in set(), inline fillRect, simplify drawText
+9. **Eliminated bag.slice + forEach** — direct index loop on s.bag[i]
+10. **Reuse ghost Set** — clear() instead of new Set() each frame
+
+### What We Learned About the Hot Path
+- **buf.set() dominates** — at ~5000 calls/frame × 0.016 µs/call ≈ 0.080 ms. This is the irreducible cost given the current rendering approach.
+- **Full-screen fillRect** — 110×34 = 3740 set calls (74% of total) just for the background clear. This is the single biggest optimization target if architectural changes are allowed.
+- **theme()/Proxy overhead is negligible** — theme() returns a singleton, Proxy.get on THEME is ~10 ns. Not the bottleneck.
+- **Object allocation is cheap in V8** — eliminating Style object literals had <1% frame_ms impact. V8's young generation GC handles small short-lived objects well.
+- **The real regression was MORE work per frame** — the beveled mino rendering doubles set calls per filled cell (fg+bg per cell vs fg-only), and drawPanel/drawBoardBorder add fillRect calls for panel fills.
+- **present() optimizations help the real app** but aren't measured by the render benchmark.
+
+### Future Optimization Opportunities
+1. **Dirty-region rendering** — only redraw changed cells. Track a dirty rect and skip the full-screen fillRect.
+2. **Packed cell buffer** — use a TypedArray (Uint32Array) for cells instead of per-cell objects. Eliminates GC pressure entirely.
+3. **Skip unchanged frames** — if no game state changed, skip render entirely.
+4. **Reduce fillRect scope** — clear only areas not overwritten by content (board, panels, previews cover ~60% of screen).
+

@@ -72,3 +72,11 @@
 
 ---
 
+## Iteration 10: Reuse computeGhostSet Set across frames
+- **Hypothesis**: `new Set<number>()` created every frame. Reuse module-level Set with .clear().
+- **Before**: frame_ms=0.097
+- **After**: frame_ms=0.095
+- **Decision**: KEEP ✅ — 2% improvement, eliminates Set allocation per frame
+
+---
+

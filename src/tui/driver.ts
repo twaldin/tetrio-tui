@@ -120,27 +120,38 @@ export class TerminalDriver implements AppDriver {
 
   present(): void {
     const back = this.back;
-    const front = this.front;
-    let out = '';
+    let front = this.front;
+    const parts: string[] = [];
     let prev: PackedCell | null = null;
     let lastX = -1, lastY = -1;
+    const w = back.width;
     for (let y = 0; y < back.height; y++) {
-      for (let x = 0; x < back.width; x++) {
-        const c = back.cells[y * back.width + x];
-        const f = front ? front.cells[y * back.width + x] : null;
-        if (f && f.ch === c.ch && f.fg === c.fg && f.bg === c.bg && f.attr === c.attr) { prev = f; continue; }
-        if (x !== lastX || y !== lastY) { out += `\x1b[${y + 1};${x + 1}H`; prev = null; }
-        out += cellSGR(c, prev);
-        out += c.ch;
+      const rowOff = y * w;
+      for (let x = 0; x < w; x++) {
+        const c = back.cells[rowOff + x];
+        if (front) {
+          const f = front.cells[rowOff + x];
+          if (f.ch === c.ch && f.fg === c.fg && f.bg === c.bg && f.attr === c.attr) { prev = f; continue; }
+        }
+        if (x !== lastX || y !== lastY) { parts.push('\x1b[', String(y + 1), ';', String(x + 1), 'H'); prev = null; }
+        parts.push(cellSGR(c, prev));
+        parts.push(c.ch);
         prev = c;
-        lastX = x + (c.ch.length); lastY = y;
+        lastX = x + 1; lastY = y;
       }
     }
-    out += '\x1b[0m';
-    this.out.write(out);
-    // copy back to front
-    this.front = new CellBuffer(back.width, back.height);
-    this.front.cells = back.cells.map((c) => ({ ...c }));
+    parts.push('\x1b[0m');
+    this.out.write(parts.join(''));
+    // Copy back→front in-place (reuse existing front buffer).
+    if (!front || front.width !== w || front.height !== back.height) {
+      front = new CellBuffer(w, back.height);
+      this.front = front;
+    }
+    const bc = back.cells, fc = front.cells;
+    for (let i = 0, len = bc.length; i < len; i++) {
+      const s = bc[i], d = fc[i];
+      d.ch = s.ch; d.fg = s.fg; d.bg = s.bg; d.attr = s.attr;
+    }
   }
 
   stop(): void {

@@ -82,6 +82,7 @@ export function computeComboAttack(combo: number): number {
 }
 
 export interface ClearResult {
+  clearedRows?: number[];  // visible-board row indices that were cleared (for effects)
   kind: 'none' | 'single' | 'double' | 'triple' | 'tetris';
   tspin: 'none' | 'mini' | 'full';
   lines: number;
@@ -293,6 +294,7 @@ function clearLines(engine: Engine, placed: FallingPiece): ClearResult {
     board.unshift(new Array<Cell>(w).fill(null));
   }
   const allclear = lines > 0 && board.every((row) => row.every((c) => c === null));
+  const clearedVisibleRows = fullRows.map((r) => r - BUFFER_ROWS);
 
   // combo (combo counts consecutive clears; first clear = combo 1)
   if (lines > 0 || tspin !== 'none') {
@@ -340,7 +342,7 @@ function clearLines(engine: Engine, placed: FallingPiece): ClearResult {
   engine.stats.lines += lines;
   engine.stats.garbage.attack += attack;
   engine.stats.garbage.sent += attack;
-  return { kind, tspin, lines, allclear, attack, b2b: engine.btb, combo: engine.combo };
+  return { kind, tspin, lines, allclear, attack, b2b: engine.btb, combo: engine.combo, clearedRows: clearedVisibleRows };
 }
 
 // 3-corner T-spin detection: the T piece's center has 3 of 4 corners filled.

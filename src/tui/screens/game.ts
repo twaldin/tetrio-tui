@@ -233,15 +233,16 @@ function defaultKeymap(): Record<string, string> {
 }
 
 /** Packed ghost cell positions (row * 256 + col) — avoids full-board copy. */
+const _ghostSet = new Set<number>();
 function computeGhostSet(falling: any): Set<number> | null {
   if (!falling || falling.hy === undefined) return null;
   const cells = PIECE_ROTATIONS[falling.type as keyof typeof PIECE_ROTATIONS][falling.r];
-  const s = new Set<number>();
+  _ghostSet.clear();
   for (const [cx, cy] of cells) {
     const bx = falling.x + cx, by = Math.floor(falling.hy) + cy - BUFFER_ROWS;
-    if (by >= 0 && bx >= 0) s.add(by * 256 + bx);
+    if (by >= 0 && bx >= 0) _ghostSet.add(by * 256 + bx);
   }
-  return s;
+  return _ghostSet;
 }
 
 function drawMiniBoard(buf: RenderBuffer, x: number, y: number, grid: BoardGrid, alive: boolean): void {

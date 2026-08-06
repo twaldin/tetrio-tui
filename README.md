@@ -24,6 +24,10 @@ engine (SRS+ kicks, Park-Miller RNG, exact versus attack/garbage tables).
 - Truecolor diff-rendering at 60fps, line-clear / attack / all-clear effects, ghost piece, hold,
   next queue, per-mode stats (APM / PPS / VS).
 
+## Demo
+
+![tetrio-tui demo](docs/demo.gif)
+
 ## Install & run
 
 ```bash

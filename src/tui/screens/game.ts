@@ -154,8 +154,8 @@ export class GameScreen implements Screen {
 
     // main board: strong border + checkerboard interior
     drawBox(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, { fg: THEME.borderBright });
-    const ghost = computeGhost(board, s.falling);
-    drawBoard(buf, boardX, boardY, board, { ghost });
+    const ghostSet = computeGhostSet(s.falling);
+    drawBoard(buf, boardX, boardY, board, { ghostSet });
 
     // NEXT panel
     const nextX = boardX + boardW + 2;
@@ -209,15 +209,16 @@ function defaultKeymap(): Record<string, string> {
   };
 }
 
-function computeGhost(board: BoardGrid, falling: any): BoardGrid {
-  if (!falling || falling.hy === undefined) return [];
-  const ghost = board.map((r) => r.slice());
+/** Packed ghost cell positions (row * 256 + col) — avoids full-board copy. */
+function computeGhostSet(falling: any): Set<number> | null {
+  if (!falling || falling.hy === undefined) return null;
   const cells = PIECE_ROTATIONS[falling.type as keyof typeof PIECE_ROTATIONS][falling.r];
+  const s = new Set<number>();
   for (const [cx, cy] of cells) {
     const bx = falling.x + cx, by = Math.floor(falling.hy) + cy - BUFFER_ROWS;
-    if (by >= 0 && by < ghost.length && bx >= 0 && bx < ghost[0].length && !ghost[by][bx]) ghost[by][bx] = falling.type;
+    if (by >= 0 && bx >= 0) s.add(by * 256 + bx);
   }
-  return ghost;
+  return s;
 }
 
 function drawMiniBoard(buf: RenderBuffer, x: number, y: number, grid: BoardGrid, alive: boolean): void {

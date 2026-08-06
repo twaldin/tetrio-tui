@@ -53,14 +53,14 @@ export function drawBoard(
   x: number,
   y: number,
   grid: BoardGrid,
-  opts: { ghost?: BoardGrid; width?: number; height?: number } = {},
+  opts: { ghostSet?: Set<number> | null; width?: number; height?: number } = {},
 ): number {
   const h = grid.length;
   const w = grid[0]?.length ?? 10;
+  const gs = opts.ghostSet;
   for (let row = 0; row < h; row++) {
     for (let col = 0; col < w; col++) {
       const cell = grid[row][col];
-      const ghostCell = opts.ghost?.[row]?.[col];
       const px = x + col * 2;
       const py = y + row;
       if (cell) {
@@ -68,7 +68,7 @@ export function drawBoard(
         const c = PIECE_COLORS[cell] ?? PIECE_COLORS.g;
         buf.set(px, py, '█', { fg: c });
         buf.set(px + 1, py, '█', { fg: shade(c, 0.82) });
-      } else if (ghostCell) {
+      } else if (gs && gs.has(row * 256 + col)) {
         const c = PIECE_COLORS.ghost;
         buf.set(px, py, '░', { fg: c });
         buf.set(px + 1, py, '░', { fg: c });

@@ -42,6 +42,22 @@ export const PIECE_COLORS: Record<string, RGB> = {
 /** Darker shade of a color (for the bottom half of a mino, adds depth). */
 function shade(c: RGB, f: number): RGB { return [Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)]; }
 
+/** Pre-computed shaded (0.82) mino colors — avoids per-cell shade() allocation. */
+const PIECE_COLORS_SHADED: Record<string, RGB> = Object.fromEntries(
+  Object.entries(PIECE_COLORS).map(([k, v]) => [k, shade(v, 0.82)])
+) as Record<string, RGB>;
+
+/** Pre-computed Style objects for board cells — avoids per-cell object creation. */
+const MINO_STYLE: Record<string, Style> = Object.fromEntries(
+  Object.entries(PIECE_COLORS).map(([k, v]) => [k, { fg: v }])
+) as Record<string, Style>;
+const MINO_STYLE_SHADED: Record<string, Style> = Object.fromEntries(
+  Object.entries(PIECE_COLORS_SHADED).map(([k, v]) => [k, { fg: v }])
+) as Record<string, Style>;
+const GHOST_STYLE: Style = { fg: PIECE_COLORS.ghost };
+const BOARD_STYLE_A: Style = { bg: THEME.boardA };
+const BOARD_STYLE_B: Style = { bg: THEME.boardB };
+
 export function pieceStyle(type: string, ghost = false): Style {
   const c = ghost ? PIECE_COLORS.ghost : (PIECE_COLORS[type] ?? PIECE_COLORS.g);
   return { fg: c };
@@ -65,18 +81,15 @@ export function drawBoard(
       const py = y + row;
       if (cell) {
         // 2-tone mino: bright top, slightly darker bottom (reads as depth)
-        const c = PIECE_COLORS[cell] ?? PIECE_COLORS.g;
-        buf.set(px, py, '█', { fg: c });
-        buf.set(px + 1, py, '█', { fg: shade(c, 0.82) });
+        buf.set(px, py, '█', MINO_STYLE[cell] ?? MINO_STYLE.g);
+        buf.set(px + 1, py, '█', MINO_STYLE_SHADED[cell] ?? MINO_STYLE_SHADED.g);
       } else if (gs && gs.has(row * 256 + col)) {
-        const c = PIECE_COLORS.ghost;
-        buf.set(px, py, '░', { fg: c });
-        buf.set(px + 1, py, '░', { fg: c });
+        buf.set(px, py, '░', GHOST_STYLE);
+        buf.set(px + 1, py, '░', GHOST_STYLE);
       } else {
         // checkerboard empty cells for readability
-        const bgc = (row + col) % 2 === 0 ? THEME.boardA : THEME.boardB;
-        buf.set(px, py, ' ', { bg: bgc });
-        buf.set(px + 1, py, ' ', { bg: bgc });
+        buf.set(px, py, ' ', (row + col) % 2 === 0 ? BOARD_STYLE_A : BOARD_STYLE_B);
+        buf.set(px + 1, py, ' ', (row + col) % 2 === 0 ? BOARD_STYLE_A : BOARD_STYLE_B);
       }
     }
   }

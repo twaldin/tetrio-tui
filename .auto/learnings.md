@@ -41,3 +41,11 @@
 
 ---
 
+## Iteration 6: Cache Style objects in game.ts render()
+- **Hypothesis**: 23 Style object literals created per render frame ({fg: t.dim}, etc.). Cache them in a theme-invalidating style registry `rs()`.
+- **Before**: frame_ms=0.097
+- **After**: frame_ms=0.096
+- **Decision**: KEEP ✅ — marginal frame improvement, reduces alloc pressure. V8 handles small objects well, so the speedup from eliminating 23 allocs is small.
+
+---
+

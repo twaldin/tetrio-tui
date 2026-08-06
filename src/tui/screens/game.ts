@@ -183,8 +183,7 @@ export class GameScreen implements Screen {
     // NEXT panel
     const nextX = boardX + boardW + 2;
     drawPanel(buf, nextX, boardY, panelW, 22, 'NEXT');
-    const next = s.bag.slice(0, 5);
-    next.forEach((p, i) => drawPiecePreview(buf, nextX + 2, boardY + 2 + i * 4, p));
+    for (let i = 0; i < 5 && i < s.bag.length; i++) drawPiecePreview(buf, nextX + 2, boardY + 2 + i * 4, s.bag[i]);
 
     // garbage incoming indicator (left edge of board)
     const incoming = s.garbage.incoming?.length ?? 0;

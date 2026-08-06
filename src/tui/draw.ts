@@ -137,11 +137,21 @@ export function center(buf: RenderBuffer, y: number, text: string, style?: Style
   buf.drawText(Math.max(0, Math.floor((buf.width - text.length) / 2)), y, text, style);
 }
 
-/** A menu list row with highlight. */
+/** A menu card (bordered, colored accent edge, big label + subtitle). */
 export function drawMenuItem(buf: RenderBuffer, x: number, y: number, w: number, label: string, sub: string, selected: boolean, color: RGB): void {
-  const bg = selected ? color : THEME.panel;
-  const fg = selected ? [10, 10, 18] as RGB : THEME.text;
-  buf.fillRect(x, y, w, 3, ' ', { bg });
-  buf.drawText(x + 2, y, label, { fg, bold: true });
-  buf.drawText(x + 2, y + 1, sub, { fg: selected ? fg : THEME.dim });
+  const h = 3;
+  if (selected) {
+    // filled card in the section color, dark text
+    buf.fillRect(x, y, w, h, ' ', { bg: color });
+    // darker accent edge on the left
+    for (let i = 0; i < h; i++) buf.set(x, y + i, '▌', { fg: shade(color, 0.6), bg: color });
+    buf.drawText(x + 2, y, label, { fg: [12, 12, 20] as RGB, bold: true, bg: color });
+    buf.drawText(x + 2, y + 1, sub, { fg: [30, 30, 44] as RGB, bg: color });
+  } else {
+    // bordered card, colored left edge, panel bg
+    buf.fillRect(x, y, w, h, ' ', { bg: THEME.panel });
+    for (let i = 0; i < h; i++) buf.set(x, y + i, '▌', { fg: color, bg: THEME.panel });
+    buf.drawText(x + 2, y, label, { fg: THEME.text, bold: true });
+    buf.drawText(x + 2, y + 1, sub, { fg: THEME.dim });
+  }
 }

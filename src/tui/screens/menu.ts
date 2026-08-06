@@ -70,6 +70,15 @@ export class MenuScreen implements Screen {
 
   render(buf: RenderBuffer): void {
     buf.fillRect(0, 0, buf.width, buf.height, ' ', { bg: THEME.bg });
+    // title banner on the root menu
+    if (this.breadcrumb.length === 1 && this.node.title === 'HOME') {
+      const logo = 'TETR.IO';
+      const logoSub = 'terminal client';
+      const lx = Math.floor((buf.width - logo.length) / 2);
+      buf.drawText(lx, 2, logo, { fg: THEME.text, bold: true });
+      buf.drawText(Math.floor((buf.width - logoSub.length) / 2), 3, logoSub, { fg: THEME.faint });
+      buf.fillRect(Math.floor(buf.width / 2) - 14, 4, 28, 1, '─', { fg: THEME.faint });
+    }
     // breadcrumb
     buf.drawText(2, 1, this.breadcrumb.join(' / '), { fg: THEME.dim });
     if (this.node.color) {
@@ -80,7 +89,7 @@ export class MenuScreen implements Screen {
 
     const w = Math.min(66, buf.width - 8);
     const x = Math.floor((buf.width - w) / 2);
-    let y = 5;
+    let y = this.node.title === 'HOME' ? 6 : 5;
     for (let i = 0; i < this.node.items.length; i++) {
       const item = this.node.items[i];
       const sel = i === this.idx;

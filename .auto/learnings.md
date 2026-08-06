@@ -32,3 +32,12 @@
 
 ---
 
+## Iteration 5: Board style cache + THEME Proxy elimination
+- **Hypothesis**: drawBoard creates tint/shade/Style objects per cell; game.ts render() hits THEME Proxy 26 times per frame. Cache all board styles in a theme-invalidating cache; replace THEME.xxx with direct theme() call cached as `t`.
+- **Before**: frame_ms=0.098, alloc_kb=0.245
+- **After**: frame_ms=0.097, alloc_kb=0.02
+- **Note**: The themes.ts Proxy-based refactor (committed in iteration 4 alongside engine.ts fix) caused a 3x regression from 0.035→0.098. The Proxy itself isn't slow (theme() returns a singleton), but the new rendering uses ▐▌ with fg+bg instead of ██ with fg-only, and adds drawBoardBorder/drawPanel with fillRect, increasing total buf.set calls from ~2000 to ~5000 per frame.
+- **Decision**: KEEP ✅ — 92% alloc reduction, frame_ms marginal (within noise)
+
+---
+

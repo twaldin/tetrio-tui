@@ -1,0 +1,205 @@
+{
+  "_comment": "TETR.IO Ribbon protocol command registry (client v1.7.8, 2026). Code 43 = generic theorypack channel; other codes are dedicated compact encodings.",
+  "dedicated": {
+    "25": {
+      "name": "new",
+      "flags": [
+        "F_ALLOC"
+      ],
+      "desc": "client hello on fresh connection (no payload)"
+    },
+    "63": {
+      "name": "die",
+      "flags": [
+        "F_ALLOC"
+      ],
+      "desc": "graceful client close (no payload)"
+    },
+    "19": {
+      "name": "rejected",
+      "flags": [
+        "F_HOOK",
+        "F_ALLOC"
+      ],
+      "desc": "server rejects (no payload)"
+    },
+    "33": {
+      "name": "reload",
+      "flags": [
+        "F_HOOK",
+        "F_ALLOC"
+      ],
+      "desc": "reload (no payload)"
+    },
+    "9": {
+      "name": "ping",
+      "flags": [
+        "F_HOOK"
+      ],
+      "data": {
+        "recvid": "u32be"
+      },
+      "desc": "ping/pong both directions, recvid = last received msg id"
+    },
+    "44": {
+      "name": "session",
+      "flags": [],
+      "data": {
+        "ribbonid": "8 bytes hex",
+        "tokenid": "8 bytes hex"
+      },
+      "desc": "session id exchange / resume"
+    },
+    "7": {
+      "name": "packets",
+      "flags": [],
+      "data": {
+        "packets": "[u32be len + bytes]..."
+      },
+      "desc": "batch of nested packets"
+    },
+    "4": {
+      "name": "kick",
+      "flags": [
+        "F_HOOK"
+      ],
+      "data": {
+        "reason": "u8 table {outdated:1,kick:2,restrict:3,block:4,anticheat:5,manual:6,rename:7} or utf8 string"
+      }
+    },
+    "42": {
+      "name": "nope",
+      "flags": [],
+      "data": {
+        "reason": "u8 table {protocol violation:0, ribbon expired:1}"
+      }
+    },
+    "51": {
+      "name": "pni",
+      "flags": [
+        "F_HOOK"
+      ],
+      "data": {
+        "type": "u8 {background:0, split:1, load:2}",
+        "timeout": "u16be"
+      },
+      "desc": "pre-migrate notification"
+    },
+    "49": {
+      "name": "notify",
+      "flags": [
+        "F_HOOK",
+        "F_ID"
+      ],
+      "data": {
+        "type": "u8 {deny:1,warm:2,ok:3,error:4,announce:5}",
+        "timeout": "u16be (deny only)",
+        "msg": "utf8"
+      }
+    },
+    "43": {
+      "name": "__pack__",
+      "flags": [
+        "F_ID"
+      ],
+      "desc": "generic theorypack channel: payload = u8 command_code + msgpackr(data)"
+    }
+  },
+  "generic": {
+    "1": "config.handling",
+    "2": "channel.subscribe",
+    "3": "channel.unsubscribe",
+    "16": "social.presence",
+    "17": "social.invite",
+    "18": "social.link",
+    "19": "social.online",
+    "20": "social.notification",
+    "21": "social.notification.ack",
+    "22": "social.dm",
+    "23": "social.dm.fail",
+    "24": "social.relation.ack",
+    "25": "social.relation.add",
+    "26": "social.relation.remove",
+    "27": "social.relation.update",
+    "28": "social.relation.clear",
+    "29": "social.party.invite",
+    "30": "social.party.invite.accept",
+    "48": "game.enter",
+    "49": "game.replace",
+    "50": "game.forfeit",
+    "51": "game.ready",
+    "52": "game.start",
+    "53": "game.spectate",
+    "54": "game.submit",
+    "55": "game.advance",
+    "56": "game.abort",
+    "57": "game.end",
+    "58": "game.score",
+    "59": "game.waitstate",
+    "60": "game.match",
+    "61": "game.match.score",
+    "62": "game.replay",
+    "63": "game.replay.enter",
+    "64": "game.replay.ige",
+    "65": "game.replay.state",
+    "66": "game.replay.board",
+    "67": "game.replay.end",
+    "68": "game.scope.start",
+    "69": "game.scope.end",
+    "70": "game.setspec",
+    "71": "game.records.resolved",
+    "80": "party.ready",
+    "81": "party.leave",
+    "82": "party.sync",
+    "83": "party.members",
+    "96": "staff.chat",
+    "97": "staff.spam",
+    "98": "staff.warn",
+    "99": "staff.silence",
+    "100": "staff.lift",
+    "101": "staff.kickfail",
+    "102": "staff.shout",
+    "103": "staff.waterfall",
+    "104": "staff.game.event",
+    "105": "staff.xrc",
+    "128": "room.create",
+    "129": "room.join",
+    "130": "room.leave",
+    "131": "room.abort",
+    "132": "room.start",
+    "133": "room.kick",
+    "134": "room.unban",
+    "135": "room.banlist",
+    "136": "room.setid",
+    "137": "room.setconfig",
+    "138": "room.update",
+    "139": "room.update.bracket",
+    "140": "room.update.host",
+    "141": "room.update.auto",
+    "142": "room.update.supporter",
+    "143": "room.update.player.add",
+    "144": "room.update.player.remove",
+    "145": "room.bracket.switch",
+    "146": "room.bracket.move",
+    "147": "room.owner.transfer",
+    "148": "room.owner.revoke",
+    "149": "room.chat",
+    "150": "room.chat.send",
+    "151": "room.chat.clear",
+    "152": "room.chat.delete",
+    "153": "room.chat.gift",
+    "154": "room.chat.game",
+    "155": "room.call",
+    "177": "league.enter",
+    "178": "league.leave",
+    "179": "league.match",
+    "180": "league.countdown",
+    "181": "league.ready",
+    "208": "server.maintenance",
+    "209": "server.announcement",
+    "210": "server.authorize",
+    "211": "server.migrate",
+    "212": "server.migrated",
+    "255": "xrc.relog"
+  }
+}

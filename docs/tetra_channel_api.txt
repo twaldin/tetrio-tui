@@ -1,0 +1,2597 @@
+API - TETR.IO
+PLAY
+TETRA CHANNEL
+MERCH
+ABOUT
+ǹ
+Ǻ
+ǻ
+Ǽ
+Ǿ
+BACK
+TETRA CHANNEL REST API
+This document outlines the way developers may read player and system data for TETR.IO. This data may be accessed through the API for TETRA CHANNEL.
+This document
+only
+describes the TETRA CHANNEL API (at
+https://ch.tetr.io/api/
+), not the main game API (at
+https://tetr.io/api/
+). Usage of the main game API is
+NOT ALLOWED
+without explicit, written consent.
+Unauthorized usage of the main game API may result in permanent suspension of your account.
+TETR.IO is an
+ongoing project in continuous development
+. The API may change with or without notice between updates. While I hope to keep reverse compatibility as much as possible, things may change every now and then!
+Usage of the TETRA CHANNEL API does not require an account or bot account. Please do note that requests are logged. Some simple rules:
+Do not flood the API with requests.
+This should be obvious, but just to be sure. Please keep the amount of requests at a moderate rate - once a second should be fine for most cases, short bursts are OK. Please consider other users!
+Honor caching data.
+If a response indicates its cache will expire after 10 minutes, please do not rerequest the data during that time, as the data should not change in that time, assuming you are sending an
+X-Session-ID
+header.
+Send an
+X-Session-ID
+header
+if you are often rerequesting the same datasets. This not only assures the data you receive is consistent, it also helps reduce database calls on our side.
+Don't use a
+X-Session-ID
+header for requests that are not related.
+That way, load balancing can function as expected.
+Do not use the API in ways that break the TETR.IO
+Terms of Service.
+Should be obvious.
+Table of Contents
+Endpoints
+Reference
+ENDPOINTS
+All endpoints are available at
+https://ch.tetr.io/api/
+.
+General
+(/general/)
+Server Statistics
+(/general/stats)
+Server Activity
+(/general/activity)
+Users
+(/users/)
+User Info
+(/users/:user)
+User Summaries
+(/users/:user/summaries/)
+User Summary: 40 LINES
+(/users/:user/summaries/40l)
+User Summary: BLITZ
+(/users/:user/summaries/blitz)
+User Summary: QUICK PLAY
+(/users/:user/summaries/zenith)
+User Summary: EXPERT QUICK PLAY
+(/users/:user/summaries/zenithex)
+User Summary: TETRA LEAGUE
+(/users/:user/summaries/league)
+User Summary: ZEN
+(/users/:user/summaries/zen)
+User Summary: Achievements
+(/users/:user/summaries/achievements)
+User Summary: All
+(/users/:user/summaries)
+User Search
+(/users/search/:query)
+User Leaderboard
+(/users/by/:leaderboard)
+Historical User Leaderboard
+(/users/history/:leaderboard/:season)
+User Personal Records
+(/users/:user/records/:gamemode/:leaderboard)
+Records
+(/records/)
+Records Leaderboard
+(/records/:leaderboard)
+Record Search
+(/records/reverse)
+TETRA NEWS
+(/news/)
+All Latest News
+(/news/)
+Latest News
+(/news/:stream)
+Labs
+(/labs/)
+Labs Scoreflow
+(/labs/scoreflow/:user/:gamemode)
+Labs Leagueflow
+(/labs/leagueflow/:user)
+Labs League Ranks
+(/labs/league_ranks)
+Achievements
+(/achievements/)
+Achievement Info
+(/achievements/:k)
+Achievement Leaderboard
+(/achievements/:k/entries)
+Server Statistics
+GET
+/general/stats
+Cache time:
+60 seconds
+Parameters
+None
+Query string parameters
+None
+Return data
+Some statistics about the service.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+usercount
+(int)
+— The amount of users on the server, including anonymous accounts.
+usercount_delta
+(float)
+— The amount of users created a second (through the last minute).
+anoncount
+(int)
+— The amount of anonymous accounts on the server.
+totalaccounts
+(int)
+— The total amount of accounts ever created (including pruned anons etc.).
+rankedcount
+(int)
+— The amount of ranked (visible in TETRA LEAGUE leaderboard) accounts on the server.
+recordcount
+(int)
+— The amount of game records stored on the server.
+gamesplayed
+(int)
+— The amount of games played across all users, including both off- and online modes.
+gamesplayed_delta
+(float)
+— The amount of games played a second (through the last minute).
+gamesfinished
+(int)
+— The amount of games played across all users, including both off- and online modes, excluding games that were not completed (e.g. retries)
+gametime
+(float)
+— The amount of seconds spent playing across all users, including both off- and online modes.
+inputs
+(int)
+— The amount of keys pressed across all users, including both off- and online modes.
+piecesplaced
+(int)
+— The amount of pieces placed across all users, including both off- and online modes.
+Server Activity
+GET
+/general/activity
+Cache time:
+10 minutes
+Parameters
+None
+Query string parameters
+None
+Return data
+A graph of user activity over the last 2 days. A user is seen as active if they logged in or received XP within the last 30 minutes.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+activity
+(int[])
+— An array of plot points, newest points first.
+User Info
+GET
+/users/
+:user
+Cache time:
+5 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+An object describing the user in detail.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested user data:
+_id
+(string)
+— The user's internal ID.
+username
+(string)
+— The user's username.
+role
+(string)
+— The user's role (one of "anon", "user", "bot", "halfmod", "mod", "admin", "sysop", "hidden", "banned").
+ts
+?
+(string)
+— When the user account was created. If not set, this account was created before join dates were recorded.
+botmaster
+?
+(string)
+— If this user is a bot, the bot's operator.
+badges
+(object[])
+— The user's badges:
+id
+(string)
+— The badge's internal ID, and the filename of the badge icon (all PNGs within
+/res/badges/
+). Note that badge IDs may include forward slashes. Please do not encode them! Follow the folder structure.
+group
+?
+(string)
+— The badge's group ID. If multiple badges have the same group ID, they are rendered together.
+label
+(string)
+— The badge's label, shown when hovered.
+desc
+(string)
+— Extra flavor text for the badge, shown when hovered.
+ts
+?
+(string)
+— The badge's timestamp, if shown.
+xp
+(float)
+— The user's XP in points.
+gamesplayed
+(int)
+— The amount of online games played by this user. If the user has chosen to hide this statistic, it will be -1.
+gameswon
+(int)
+— The amount of online games won by this user. If the user has chosen to hide this statistic, it will be -1.
+gametime
+(float)
+— The amount of seconds this user spent playing, both on- and offline. If the user has chosen to hide this statistic, it will be -1.
+country
+(string?)
+— The user's ISO 3166-1 country code, or null if hidden/unknown. Some vanity flags exist.
+badstanding
+?
+(bool)
+— Whether this user currently has a bad standing (recently banned).
+supporter
+(bool)
+— Whether this user is currently supporting TETR.IO <3
+supporter_tier
+(int)
+— An indicator of their total amount supported, between 0 and 4 inclusive.
+avatar_revision
+?
+(int)
+— This user's avatar ID. Get their avatar at
+https://tetr.io/user-content/avatars/{ USERID }.jpg?rv={ AVATAR_REVISION }
+banner_revision
+?
+(int)
+— This user's banner ID. Get their banner at
+https://tetr.io/user-content/banners/{ USERID }.jpg?rv={ BANNER_REVISION }
+. Ignore this field if the user is not a supporter.
+bio
+?
+(string)
+— This user's "About Me" section. Ignore this field if the user is not a supporter.
+connections
+(object)
+— This user's third party connections:
+discord
+?
+(object)
+— This user's connection to Discord:
+id
+(string)
+— This user's Discord ID.
+username
+(string)
+— This user's Discord username.
+display_username
+(string)
+— Same as
+username
+.
+twitch
+?
+(object)
+— This user's connection to Twitch:
+id
+(string)
+— This user's Twitch user ID.
+username
+(string)
+— This user's Twitch username (as used in the URL).
+display_username
+(string)
+— This user's Twitch display name (may include Unicode).
+twitter
+?
+(object)
+— This user's connection to X (kept in the API as
+twitter
+for readability):
+id
+(string)
+— This user's X user ID.
+username
+(string)
+— This user's X handle (as used in the URL).
+display_username
+(string)
+— This user's X display name (may include Unicode).
+reddit
+?
+(object)
+— This user's connection to Reddit:
+id
+(string)
+— This user's Reddit user ID.
+username
+(string)
+— This user's Reddit username.
+display_username
+(string)
+— Same as
+username
+.
+youtube
+?
+(object)
+— This user's connection to YouTube:
+id
+(string)
+— This user's YouTube user ID (as used in the URL).
+username
+(string)
+— This user's YouTube display name.
+display_username
+(string)
+— Same as
+username
+.
+steam
+?
+(object)
+— This user's connection to Steam:
+id
+(string)
+— This user's SteamID.
+username
+(string)
+— This user's Steam display name.
+display_username
+(string)
+— Same as
+username
+.
+friend_count
+(int)
+— The amount of players who have added this user to their friends list.
+distinguishment
+?
+(object)
+— This user's distinguishment banner, if any. Must at least have:
+type
+(string)
+— The type of distinguishment banner.
+achievements
+(int[])
+— This user's featured achievements. Up to three integers which correspond to Achievement IDs.
+ar
+(int)
+— This user's Achievement Rating.
+ar_counts
+(object)
+— The breakdown of the source of this user's Achievement Rating:
+1
+?
+(int)
+— The amount of ranked Bronze achievements this user has.
+2
+?
+(int)
+— The amount of ranked Silver achievements this user has.
+3
+?
+(int)
+— The amount of ranked Gold achievements this user has.
+4
+?
+(int)
+— The amount of ranked Platinum achievements this user has.
+5
+?
+(int)
+— The amount of ranked Diamond achievements this user has.
+100
+?
+(int)
+— The amount of ranked Issued achievements this user has.
+t100
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 100 with.
+t50
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 50 with.
+t25
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 25 with.
+t10
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 10 with.
+t5
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 5 with.
+t3
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 3 with.
+oldusernames
+(object[])
+— The user's previous usernames:
+username
+(string)
+— The username the user used.
+ts
+?
+(int)
+— The time at which the user changed their username away from this username.
+User Summary: 40 LINES
+GET
+/users/
+:user
+/summaries/40l
+Cache time:
+5 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+An object describing a summary of the user's 40 LINES games.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+record
+(object?)
+— The user's 40 LINES
+record
+, or null if never played.
+rank
+(int)
+— The user's rank in global leaderboards, or -1 if not in global leaderboards.
+rank_local
+(int)
+— The user's rank in their country's leaderboards, or -1 if not in any.
+User Summary: BLITZ
+GET
+/users/
+:user
+/summaries/blitz
+Cache time:
+5 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+An object describing a summary of the user's BLITZ games.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+record
+(object?)
+— The user's BLITZ
+record
+, or null if never played.
+rank
+(int)
+— The user's rank in global leaderboards, or -1 if not in global leaderboards.
+rank_local
+(int)
+— The user's rank in their country's leaderboards, or -1 if not in any.
+User Summary: QUICK PLAY
+GET
+/users/
+:user
+/summaries/zenith
+Cache time:
+5 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+An object describing a summary of the user's QUICK PLAY games.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+record
+(object?)
+— The user's QUICK PLAY
+record
+, or null if the user hasn't played this week.
+rank
+(int)
+— The user's rank in global leaderboards, or -1 if not in global leaderboards.
+rank_local
+(int)
+— The user's rank in their country's leaderboards, or -1 if not in any.
+best
+(object)
+— The user's career best:
+record
+(object?)
+— The user's best
+record
+, or null if the user hasn't placed one yet.
+rank
+(int)
+— The rank said record had in global leaderboards at the end of the week, or -1 if it was not ranked.
+■ Career bests are only updated on revolve time (when the week changes, which is 12AM on Monday, UTC). This is because if the record is at Floor 10, the final leaderboard position is considered first (the mode is multiplayer, after all).
+User Summary: EXPERT QUICK PLAY
+GET
+/users/
+:user
+/summaries/zenithex
+Cache time:
+5 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+An object describing a summary of the user's EXPERT QUICK PLAY games.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+record
+(object?)
+— The user's EXPERT QUICK PLAY
+record
+, or null if the user hasn't played this week.
+rank
+(int)
+— The user's rank in global leaderboards, or -1 if not in global leaderboards.
+rank_local
+(int)
+— The user's rank in their country's leaderboards, or -1 if not in any.
+best
+(object)
+— The user's career best:
+record
+(object?)
+— The user's best
+record
+, or null if the user hasn't placed one yet.
+rank
+(int)
+— The rank said record had in global leaderboards at the end of the week, or -1 if it was not ranked.
+■ Career bests are only updated on revolve time (when the week changes, which is 12AM on Monday, UTC). This is because if the record is at Floor 10, the final leaderboard position is considered first (the mode is multiplayer, after all).
+User Summary: TETRA LEAGUE
+GET
+/users/
+:user
+/summaries/league
+Cache time:
+5 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+An object describing a summary of the user's TETRA LEAGUE standing.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+gamesplayed
+(int)
+— The amount of TETRA LEAGUE games played by this user.
+gameswon
+(int)
+— The amount of TETRA LEAGUE games won by this user.
+glicko
+(float)
+— This user's Glicko-2 rating, or -1 if less than 10 games were played.
+rd
+?
+(float)
+— This user's Glicko-2 Rating Deviation, or -1 if less than 10 games were played. If over 100, this user is unranked.
+decaying
+(bool)
+— Whether this user's RD is rising (has not played in the last week).
+tr
+(float)
+— This user's TR (Tetra Rating), or -1 if less than 10 games were played.
+gxe
+(float)
+— This user's GLIXARE score (a % chance of beating an average player), or -1 if less than 10 games were played.
+rank
+(string)
+— This user's letter rank.
+z
+is unranked.
+bestrank
+?
+(string)
+— This user's highest achieved rank this season.
+apm
+?
+(float)
+— This user's average APM (attack per minute) over the last 10 games.
+pps
+?
+(float)
+— This user's average PPS (pieces per second) over the last 10 games.
+vs
+?
+(float)
+— This user's average VS (versus score) over the last 10 games.
+standing
+?
+(int)
+— This user's position in global leaderboards, or -1 if not applicable.
+standing_local
+?
+(int)
+— This user's position in local leaderboards, or -1 if not applicable.
+percentile
+?
+(float)
+— This user's percentile position (0 is best, 1 is worst).
+percentile_rank
+?
+(string)
+— This user's percentile rank, or
+z
+if not applicable.
+next_rank
+?
+(string?)
+— The next rank this user can achieve, if they win more games, or null if unranked (or the best rank).
+prev_rank
+?
+(string?)
+— The previous rank this user can achieve, if they lose more games, or null if unranked (or the worst rank).
+next_at
+?
+(int)
+— The position of the best player in the user's current rank, surpass them to go up a rank. -1 if unranked (or the best rank).
+prev_at
+?
+(int)
+— The position of the worst player in the user's current rank, dip below them to go down a rank. -1 if unranked (or the worst rank).
+past
+(object)
+— An object mapping past season IDs to past season final placement information. A season will include the following:
+season
+(string)
+— The season ID.
+username
+(string)
+— The username the user had at the time.
+country
+?
+(string)
+— The country the user represented at the time.
+placement
+?
+(int)
+— This user's final position in the season's global leaderboards.
+ranked
+(bool)
+— Whether the user was ranked at the time of the season's end.
+gamesplayed
+(int)
+— The amount of TETRA LEAGUE games played by this user.
+gameswon
+(int)
+— The amount of TETRA LEAGUE games won by this user.
+glicko
+(float)
+— This user's final Glicko-2 rating.
+rd
+(float)
+— This user's final Glicko-2 Rating Deviation.
+tr
+(float)
+— This user's final TR (Tetra Rating).
+gxe
+(float)
+— This user's final GLIXARE score (a % chance of beating an average player).
+rank
+(string)
+— This user's final letter rank.
+z
+is unranked.
+bestrank
+?
+(string)
+— This user's highest achieved rank in the season.
+apm
+(float)
+— This user's average APM (attack per minute) over the last 10 games in the season.
+pps
+(float)
+— This user's average PPS (pieces per second) over the last 10 games in the season.
+vs
+(float)
+— This user's average VS (versus score) over the last 10 games in the season.
+■ Season information is only saved if the user had finished placements in the season, and was not banned or hidden.
+User Summary: ZEN
+GET
+/users/
+:user
+/summaries/zen
+Cache time:
+5 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+An object describing a summary of the user's ZEN progress.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+level
+(int)
+— The user's level.
+score
+(float)
+— The user's score.
+User Summary: Achievements
+GET
+/users/
+:user
+/summaries/achievements
+Cache time:
+5 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+An object containing all the user's achievements.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object[])
+— If successful, the user's
+achievement
+s.
+User Summary: All
+GET
+/users/
+:user
+/summaries
+Cache time:
+5 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+An object containing all the user's summaries in one.
+▲ Please consider whether you really need this. If you only collect data for one or two game modes, please use the individual summaries' endpoints instead.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the user's summaries:
+40l
+(object)
+— See
+User Summary: 40 LINES
+.
+blitz
+(object)
+— See
+User Summary: BLITZ
+.
+zenith
+(object)
+— See
+User Summary: QUICK PLAY
+.
+zenithex
+(object)
+— See
+User Summary: EXPERT QUICK PLAY
+.
+league
+(object)
+— See
+User Summary: TETRA LEAGUE
+.
+zen
+(object)
+— See
+User Summary: ZEN
+.
+achievements
+(object)
+— See
+User Summary: Achievements
+.
+User Search
+GET
+/users/search/
+:query
+Cache time:
+5 minutes
+Parameters
+:query
+(string)
+required
+— The social connection to look up. Must be one of:
+discord:
+id:
+snowflake
+— a Discord user ID
+discord:
+username:
+username
+— a Discord username
+twitch:
+id:
+userid
+— a Twitch user ID
+twitch:
+username:
+username
+— a Twitch username (as used in the URL)
+twitch:
+display_username:
+username
+— a Twitch display name (may include Unicode)
+twitter:
+id:
+userid
+— an X user ID
+twitter:
+username:
+handle
+— an X handle (as used in the URL)
+twitter:
+display_username:
+username
+— an X display name (may include Unicode)
+reddit:
+id:
+userid
+— a Reddit user ID
+reddit:
+username:
+username
+— a Reddit username
+youtube:
+id:
+userid
+— a YouTube user ID (as used in the URL)
+youtube:
+username:
+username
+— a YouTube display name
+steam:
+id:
+steamid
+— a SteamID
+steam:
+username:
+username
+— a Steam display name
+Query string parameters
+None
+Return data
+An Array of found users.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+users
+(object[])
+— The found users:
+_id
+(string)
+— The user's internal ID.
+username
+(string)
+— The user's username.
+User Leaderboard
+GET
+/users/by/
+:leaderboard
+Cache time:
+10 minutes
+Parameters
+:leaderboard
+(string)
+required
+— The leaderboard to sort users by. Must be one of:
+league
+— the TETRA LEAGUE leaderboard.
+xp
+— the XP leaderboard.
+ar
+— the Achievement Rating leaderboard.
+Query string parameters
+after
+?
+(prisecter)
+— The upper bound. Use this to paginate downwards: take the lowest seen prisecter and pass that back through this field to continue scrolling.
+before
+?
+(prisecter)
+— The lower bound. Use this to paginate upwards: take the highest seen prisecter and pass that back through this field to continue scrolling. If set, the search order is reversed (returning the lowest items that match the query)
+limit
+?
+(int)
+— The amount of entries to return, between 1 and 100. 25 by default.
+country
+?
+(string)
+— The ISO 3166-1 country code to filter to. Leave unset to not filter by country.
+A
+prisecter
+is a string consisting of three floats separated by colons (:). The
+p
+field in an entry allows you to continue paginating.
+▲ The
+before
+and
+after
+parameters may not be combined.
+Return data
+An array of users fulfilling the search criteria.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+entries
+(object[])
+— The matched users:
+_id
+(string)
+— The user's internal ID.
+username
+(string)
+— The user's username.
+role
+(string)
+— The user's role (one of "anon", "user", "bot", "halfmod", "mod", "admin", "sysop").
+ts
+?
+(string)
+— When the user account was created. If not set, this account was created before join dates were recorded.
+xp
+(float)
+— The user's XP in points.
+country
+(string?)
+— The user's ISO 3166-1 country code, or null if hidden/unknown. Some vanity flags exist.
+supporter
+(bool)
+— Whether this user is currently supporting TETR.IO <3
+league
+(object)
+— This user's current TETRA LEAGUE standing:
+gamesplayed
+(int)
+— The amount of TETRA LEAGUE games played by this user.
+gameswon
+(int)
+— The amount of TETRA LEAGUE games won by this user.
+tr
+(float)
+— This user's TR (Tetra Rating).
+gxe
+(float)
+— This user's GLIXARE.
+rank
+(string)
+— This user's letter rank.
+bestrank
+(string)
+— This user's highest achieved rank this season.
+glicko
+(float)
+— This user's Glicko-2 rating.
+rd
+(float)
+— This user's Glicko-2 Rating Deviation.
+apm
+(float)
+— This user's average APM (attack per minute) over the last 10 games.
+pps
+(float)
+— This user's average PPS (pieces per second) over the last 10 games.
+vs
+(float)
+— This user's average VS (versus score) over the last 10 games.
+decaying
+(bool)
+— Whether this user's RD is rising (has not played in the last week).
+gamesplayed
+(int)
+— The amount of online games played by this user. If the user has chosen to hide this statistic, it will be -1.
+gameswon
+(int)
+— The amount of online games won by this user. If the user has chosen to hide this statistic, it will be -1.
+gametime
+(float)
+— The amount of seconds this user spent playing, both on- and offline. If the user has chosen to hide this statistic, it will be -1.
+ar
+(int)
+— This user's Achievement Rating.
+ar_counts
+(object)
+— The breakdown of the source of this user's Achievement Rating:
+1
+?
+(int)
+— The amount of ranked Bronze achievements this user has.
+2
+?
+(int)
+— The amount of ranked Silver achievements this user has.
+3
+?
+(int)
+— The amount of ranked Gold achievements this user has.
+4
+?
+(int)
+— The amount of ranked Platinum achievements this user has.
+5
+?
+(int)
+— The amount of ranked Diamond achievements this user has.
+100
+?
+(int)
+— The amount of ranked Issued achievements this user has.
+t100
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 100 with.
+t50
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 50 with.
+t25
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 25 with.
+t10
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 10 with.
+t5
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 5 with.
+t3
+?
+(int)
+— The amount of competitive achievements this user has ranked into the top 3 with.
+p
+(object)
+— The prisecter of this entry:
+pri
+(float)
+— The primary sort key.
+sec
+(float)
+— The secondary sort key.
+ter
+(float)
+— The tertiary sort key.
+● Want to paginate over this data? Remember to pass an
+X-Session-ID
+header to ensure data consistency.
+Historical User Leaderboard
+GET
+/users/history/
+:leaderboard
+/
+:season
+Cache time:
+10 minutes
+Parameters
+:leaderboard
+(string)
+required
+— The leaderboard to sort users by. Must be:
+league
+— the TETRA LEAGUE leaderboard.
+:season
+(string)
+required
+— The season to look up.
+Query string parameters
+after
+?
+(prisecter)
+— The upper bound. Use this to paginate downwards: take the lowest seen prisecter and pass that back through this field to continue scrolling.
+before
+?
+(prisecter)
+— The lower bound. Use this to paginate upwards: take the highest seen prisecter and pass that back through this field to continue scrolling. If set, the search order is reversed (returning the lowest items that match the query)
+limit
+?
+(int)
+— The amount of entries to return, between 1 and 100. 25 by default.
+country
+?
+(string)
+— The ISO 3166-1 country code to filter to. Leave unset to not filter by country.
+A
+prisecter
+is a string consisting of three floats separated by colons (:). The
+p
+field in an entry allows you to continue paginating.
+▲ The
+before
+and
+after
+parameters may not be combined.
+Return data
+An array of historical user blobs fulfilling the search criteria.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+entries
+(object[])
+— The matched users:
+_id
+(string)
+— The user's internal ID.
+season
+(string)
+— The season ID.
+username
+(string)
+— The username the user had at the time.
+country
+?
+(string)
+— The country the user represented at the time.
+placement
+(int)
+— This user's final position in the season's global leaderboards.
+ranked
+(bool)
+— Whether the user was ranked at the time of the season's end.
+gamesplayed
+(int)
+— The amount of TETRA LEAGUE games played by this user.
+gameswon
+(int)
+— The amount of TETRA LEAGUE games won by this user.
+glicko
+(float)
+— This user's final Glicko-2 rating.
+rd
+(float)
+— This user's final Glicko-2 Rating Deviation.
+tr
+(float)
+— This user's final TR (Tetra Rating).
+gxe
+(float)
+— This user's final GLIXARE score (a % chance of beating an average player).
+rank
+(string)
+— This user's final letter rank.
+bestrank
+?
+(string)
+— This user's highest achieved rank in the season.
+apm
+(float)
+— This user's average APM (attack per minute) over the last 10 games in the season.
+pps
+(float)
+— This user's average PPS (pieces per second) over the last 10 games in the season.
+vs
+(float)
+— This user's average VS (versus score) over the last 10 games in the season.
+p
+(object)
+— The prisecter of this entry:
+pri
+(float)
+— The primary sort key.
+sec
+(float)
+— The secondary sort key.
+ter
+(float)
+— The tertiary sort key.
+● Want to paginate over this data? Remember to pass an
+X-Session-ID
+header to ensure data consistency.
+User Personal Records
+GET
+/users/
+:user
+/records/
+:gamemode
+/
+:leaderboard
+Cache time:
+10 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+:gamemode
+(string)
+required
+— The game mode to look up. One of:
+40l
+— their 40 LINES records.
+blitz
+— their BLITZ records.
+zenith
+— their QUICK PLAY records.
+zenithex
+— their EXPERT QUICK PLAY records.
+league
+— their TETRA LEAGUE history.
+:leaderboard
+(string)
+required
+— The personal leaderboard to look up. One of:
+top
+— their top scores.
+recent
+— their most recently placed records.
+progression
+— their top scores (PBs only).
+Query string parameters
+after
+?
+(prisecter)
+— The upper bound. Use this to paginate downwards: take the lowest seen prisecter and pass that back through this field to continue scrolling.
+before
+?
+(prisecter)
+— The lower bound. Use this to paginate upwards: take the highest seen prisecter and pass that back through this field to continue scrolling. If set, the search order is reversed (returning the lowest items that match the query)
+limit
+?
+(int)
+— The amount of entries to return, between 1 and 100. 25 by default.
+A
+prisecter
+is a string consisting of three floats separated by colons (:). The
+p
+field in an entry allows you to continue paginating.
+▲ The
+before
+and
+after
+parameters may not be combined.
+Return data
+A list of Records fulfilling the search criteria.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+entries
+(object[])
+— The requested
+record
+s.
+● Want to paginate over this data? Remember to pass an
+X-Session-ID
+header to ensure data consistency.
+Records Leaderboard
+GET
+/records/
+:leaderboard
+Cache time:
+10 minutes
+Parameters
+:leaderboard
+(string)
+required
+— The leaderboard to look up (e.g.
+40l_global
+,
+blitz_country_XM
+,
+zenith_global@2024w31
+). Leaderboard IDs consist of:
+the
+game mode
+, e.g.
+40l
+,
+the
+scope
+, either
+_global
+or a country, e.g.
+_country_XM
+,
+an optional Revolution ID, e.g.
+@2024w31
+.
+Query string parameters
+after
+?
+(prisecter)
+— The upper bound. Use this to paginate downwards: take the lowest seen prisecter and pass that back through this field to continue scrolling.
+before
+?
+(prisecter)
+— The lower bound. Use this to paginate upwards: take the highest seen prisecter and pass that back through this field to continue scrolling. If set, the search order is reversed (returning the lowest items that match the query)
+limit
+?
+(int)
+— The amount of entries to return, between 1 and 100. 25 by default.
+A
+prisecter
+is a string consisting of three floats separated by colons (:). The
+p
+field in an entry allows you to continue paginating.
+▲ The
+before
+and
+after
+parameters may not be combined.
+Return data
+A list of Records fulfilling the search criteria.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+entries
+(object[])
+— The requested
+record
+s. The record will additionally include:
+p
+(object)
+— The prisecter of this entry:
+pri
+(float)
+— The primary sort key.
+sec
+(float)
+— The secondary sort key.
+ter
+(float)
+— The tertiary sort key.
+● Want to paginate over this data? Remember to pass an
+X-Session-ID
+header to ensure data consistency.
+Record Search
+GET
+/records/reverse
+Cache time:
+10 seconds
+Parameters
+None
+Query string parameters
+user
+(MongoID)
+required
+— The user ID to look up.
+gamemode
+(string)
+required
+— The game mode to look up.
+ts
+(int)
+required
+— The timestamp of the record to find.
+Return data
+An object describing the record found, or null if none found.
+▲ Only one record is returned. It is generally not possible for a player to play the same gamemode twice in a millisecond.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object?)
+— If successful and found, the requested
+record
+.
+All Latest News
+GET
+/news/
+Cache time:
+1 second
+Parameters
+None
+Query string parameters
+limit
+?
+(int)
+— The amount of entries to return, between 1 and 100. 25 by default.
+Return data
+The latest news items in any stream.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+news
+(object[])
+— The latest news items:
+_id
+(string)
+— The item's internal ID.
+stream
+(string)
+— The item's stream.
+type
+(string)
+— The item's type.
+data
+(object)
+— The item's
+records
+.
+ts
+(string)
+— The item's creation date.
+Latest News
+GET
+/news/
+:stream
+Cache time:
+1 minute
+Parameters
+:stream
+(string)
+required
+— The news stream to look up (either "global" or "user_{ userID }").
+Query string parameters
+limit
+?
+(int)
+— The amount of entries to return, between 1 and 100. 25 by default.
+Return data
+The latest news items in the stream. Use stream "global" for the global news.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+news
+(object[])
+— The latest news items:
+_id
+(string)
+— The item's internal ID.
+stream
+(string)
+— The item's stream.
+type
+(string)
+— The item's type.
+data
+(object)
+— The item's
+records
+.
+ts
+(string)
+— The item's creation date.
+Labs Scoreflow
+GET
+/labs/scoreflow/
+:user
+/
+:gamemode
+Cache time:
+10 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+:gamemode
+(string)
+required
+— The game mode to look up.
+Query string parameters
+None
+Return data
+A condensed graph of all of the user's records in the gamemode.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+startTime
+(int)
+— The timestamp of the oldest record found.
+points
+(array[])
+— The points in the chart:
+0
+(int)
+— The timestamp offset. Add
+startTime
+to get the true timestamp.
+1
+(int)
+— Whether the score set was a PB. 0 = not a PB, 1 = PB.
+2
+(int)
+— The score achieved. (For 40 LINES, this is negative.)
+Labs Leagueflow
+GET
+/labs/leagueflow/
+:user
+Cache time:
+10 minutes
+Parameters
+:user
+(string or MongoID)
+required
+— The lowercase username or user ID to look up.
+Query string parameters
+None
+Return data
+A condensed graph of all of the user's matches in TETRA LEAGUE.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+startTime
+(int)
+— The timestamp of the oldest record found.
+points
+(array[])
+— The points in the chart:
+0
+(int)
+— The timestamp offset. Add
+startTime
+to get the true timestamp.
+1
+(int)
+— The result of the match, where:
+1
+= victory,
+2
+= defeat,
+3
+= victory by disqualification,
+4
+= defeat by disqualification,
+5
+= tie,
+6
+= no contest,
+7
+= match nullified.
+2
+(int)
+— The user's TR after the match.
+3
+(int)
+— The opponent's TR before the match. (If the opponent was unranked, same as
+2
+.)
+Labs League Ranks
+GET
+/labs/league_ranks
+Cache time:
+Alternate Cache Rule
+(Labs record updated every 30 minutes, worker caches for 1 minute)
+Parameters
+None
+Query string parameters
+None
+Return data
+A view over all TETRA LEAGUE ranks and their metadata.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested Labs Data:
+_id
+(string)
+— The internal ID of the Labs data point.
+s
+(string)
+— The stream ID the Labs data point belongs to.
+t
+(string)
+— The time at which the data point was created.
+data
+(object)
+— The data point:
+total
+(int)
+— The total amount of players.
+*
+(object)
+— For every rank named *:
+pos
+(int)
+— The leaderboard position required to attain this rank.
+percentile
+(float)
+— The percentile (0~1) this rank is for.
+tr
+(float)
+— The TR required to obtain a leaderboard position that will award this rank.
+targettr
+(float)
+— The TR this rank will gravitate toward (using de- and inflation zones).
+apm
+(float?)
+— The average APM across all players in this rank.
+pps
+(float?)
+— The average PPS across all players in this rank.
+vs
+(float?)
+— The average Versus Score across all players in this rank.
+count
+(int)
+— The amount of players with this rank.
+Achievement Info
+GET
+/achievements/
+:k
+Cache time:
+5 minutes
+Parameters
+:k
+(int)
+required
+— The achievement ID to look up.
+Query string parameters
+None
+Return data
+Data about the achievement itself, its cutoffs, and its leaderboard.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+achievement
+(object)
+— The
+achievement
+info.
+leaderboard
+(object[])
+— The first 100 entries in the achievement's leaderboard:
+u
+(object)
+— The user owning the achievement:
+_id
+(string)
+— The user's internal ID.
+username
+(string)
+— The user's username.
+role
+(string)
+— The user's role.
+supporter
+(bool)
+— Whether the user is supporting TETR.IO.
+country
+(string?)
+— The user's country, if public.
+v
+(float)
+— The achieved score in the achievement.
+a
+(float?)
+— Additional score for the achievement.
+t
+(string)
+— The time the achievement was last updated.
+x
+?
+(object)
+— Additional data for this achievement if applicable. See the
+achievement
+spec.
+cutoffs
+(object)
+— Scores required to obtain the achievement:
+total
+(int)
+— The total amount of users with this achievement.
+diamond
+?
+(float?)
+— If applicable, the score required to obtain a Diamond rank. (If null, any score is allowed; if not given, this rank is not available.)
+platinum
+?
+(float?)
+— If applicable, the score required to obtain a Platinum rank. (If null, any score is allowed; if not given, this rank is not available.)
+gold
+?
+(float?)
+— If applicable, the score required to obtain a Gold rank. (If null, any score is allowed; if not given, this rank is not available.)
+silver
+?
+(float?)
+— If applicable, the score required to obtain a Silver rank. (If null, any score is allowed; if not given, this rank is not available.)
+bronze
+?
+(float?)
+— If applicable, the score required to obtain a Bronze rank. (If null, any score is allowed; if not given, this rank is not available.)
+diamond_count
+?
+(float)
+— If applicable, the amount of players who have at least a Diamond rank. (If not given, this rank is not available.)
+platinum_count
+?
+(float)
+— If applicable, the amount of players who have at least a Platinum rank. (If not given, this rank is not available.)
+gold_count
+?
+(float)
+— If applicable, the amount of players who have at least a Gold rank. (If not given, this rank is not available.)
+silver_count
+?
+(float)
+— If applicable, the amount of players who have at least a Silver rank. (If not given, this rank is not available.)
+bronze_count
+?
+(float)
+— If applicable, the amount of players who have at least a Bronze rank. (If not given, this rank is not available.)
+■ Note that you will receive double the results for a pairwise achievement (
+data.achievement.pair
+is
+true
+). You are expected to compress two entries that reference eachother (in
+x.ally
+) into one entry on your end.
+Achievement Leaderboard
+GET
+/achievements/
+:k
+/entries
+Cache time:
+5 minutes
+Parameters
+:k
+(int)
+required
+— The achievement ID to collect leaderboards for.
+Query string parameters
+after
+?
+(prisecter)
+— The upper bound. Use this to paginate downwards: take the lowest seen prisecter and pass that back through this field to continue scrolling.
+before
+?
+(prisecter)
+— The lower bound. Use this to paginate upwards: take the highest seen prisecter and pass that back through this field to continue scrolling. If set, the search order is reversed (returning the lowest items that match the query)
+limit
+?
+(int)
+— The amount of entries to return, between 1 and 100. 25 by default.
+A
+prisecter
+is a string consisting of three floats separated by colons (:). The
+p
+field in an entry allows you to continue paginating.
+▲ The
+before
+and
+after
+parameters may not be combined.
+Return data
+An array of entries fulfilling the search criteria.
+success
+(bool)
+— Whether the request was successful.
+error
+?
+(object)
+— If unsuccessful, the reason the request failed.
+cache
+?
+(object)
+— If successful,
+data about how this request was cached
+.
+data
+?
+(object)
+— If successful, the requested data:
+entries
+(object[])
+— The matched entries in the achievement's leaderboard:
+u
+(object)
+— The user owning the achievement:
+_id
+(string)
+— The user's internal ID.
+username
+(string)
+— The user's username.
+role
+(string)
+— The user's role.
+supporter
+(bool)
+— Whether the user is supporting TETR.IO.
+country
+(string?)
+— The user's country, if public.
+v
+(float)
+— The achieved score in the achievement.
+a
+(float?)
+— Additional score for the achievement.
+t
+(string)
+— The time the achievement was last updated.
+x
+?
+(object)
+— Additional data for this achievement if applicable. See the
+achievement
+spec.
+p
+(object)
+— The prisecter of this entry:
+pri
+(float)
+— The primary sort key.
+sec
+(float)
+— The secondary sort key.
+ter
+(float)
+— The tertiary sort key.
+● Want to paginate over this data? Remember to pass an
+X-Session-ID
+header to ensure data consistency.
+REFERENCE
+Cache Data Structure
+Record Data Structure
+Achievement Data Structure
+Stream IDs
+News Data Structure
+Cache Data Structure
+All responses from the TETRA CHANNEL API are cached. With every response, a
+cache
+object is made available to view the status of the cache:
+status
+(string)
+— Whether the cache was hit. Either "hit", "miss", or "awaited" (resource was already being requested by another client)
+cached_at
+(int)
+— When this resource was cached.
+cached_until
+(int)
+— When this resource's cache expires.
+▲ Cache is not shared between workers. Load balancing may therefore give you unexpected responses. To use the same worker, pass the same
+X-Session-ID
+header for all requests that should use the same cache.
+Record Data Structure
+Achieved scores and matches are saved into Record objects. While these may change in structure drastically, the most important parts of their structure is outlined below:
+▲ This may change at any time.
+_id
+(string)
+— The Record's ID.
+replayid
+(string)
+— The Record's ReplayID.
+stub
+(bool)
+— Whether the Replay has been pruned.
+gamemode
+(string)
+— The played game mode.
+pb
+(bool)
+— Whether this is the user's current personal best in the game mode.
+oncepb
+(bool)
+— Whether this was once the user's personal best in the game mode.
+ts
+(string)
+— The time the Record was submitted.
+revolution
+(string?)
+— If revolved away, the revolution it belongs to.
+user
+(object)
+— The user owning the Record:
+id
+(string)
+— The user's user ID.
+username
+(string)
+— The user's username.
+avatar_revision
+(int?)
+— The user's avatar revision (for obtaining avatar URLs).
+banner_revision
+(int?)
+— The user's banner revision (for obtaining banner URLs).
+country
+(string?)
+— The user's country, if public.
+supporter
+(bool)
+— Whether the user is supporting TETR.IO.
+otherusers
+(object[])
+— Other users mentioned in the Record. Same format as
+user
+. If not empty, this is a multiplayer game (this changes the format of
+results
+)
+leaderboards
+(string[])
+— The leaderboards this Record is mentioned in.
+disputed
+(bool)
+— Whether this Record is disputed.
+results
+(object)
+— The results of this Record:
+For
+single-player
+games (otherusers is empty):
+stats
+(object)
+— The final stats of the game played.
+aggregatestats
+(object)
+— Aggregate stats of the game played.
+gameoverreason
+(string)
+— The reason the game has ended.
+For
+multi-player
+games (otherusers is not empty):
+leaderboard
+(object[])
+— The final leaderboard at the end of the match:
+id
+(string)
+— The player's User ID.
+username
+(string)
+— The player's username.
+active
+(bool)
+— Whether the player is still in the game. If false, the user has likely been disqualified.
+wins
+(int)
+— The amount of rounds won by the player.
+stats
+(object)
+— The aggregate stats across all rounds.
+rounds
+(object[][])
+— The scoreboards for every round:
+id
+(string)
+— The player's User ID.
+username
+(string)
+— The player's username.
+active
+(bool)
+— Whether the player is still in the game. If false, the user has likely been disqualified for the round.
+alive
+(bool)
+— Whether the player made it through the round alive.
+lifetime
+(int)
+— The time alive in this match.
+stats
+(object)
+— The aggregate stats for the player for this round.
+extras
+(object)
+— Extra metadata for this Record:
+league
+?
+(object)
+— A mapping of user IDs to before-and-afters. Each entry is either null (player was unranked) or contains:
+glicko
+(float)
+— The Glicko-2 rating of the user.
+rd
+(float)
+— The RD of the user.
+tr
+(float)
+— The TR of the user.
+rank
+(string)
+— The rank of the user.
+placement
+(int?)
+— The user's position in the global leaderboards.
+result
+?
+(string)
+— The result of the game, from the owner's point of view.
+zenith
+?
+(object)
+— Extra data for QUICK PLAY:
+mods
+(string[])
+— The mods used in the run.
+peakPos
+?
+(int)
+— The run's peak position in the scoreboard. -1 if unknown.
+peakCount
+?
+(int)
+— The total players in the scoreboard at the time of reaching peakPos. -1 if unknown.
+finalPos
+?
+(int)
+— The run's final position in the scoreboard. -1 if unknown.
+finalCount
+?
+(int)
+— The total players in the scoreboard at the run's end. -1 if unknown.
+Achievement Data Structure
+Achievements may look daunting with their short names, but they are not as difficult as they look. Here's the important parts of the structure:
+k
+(int)
+— The Achievement ID, for every type of achievement.
+category
+(string)
+— The category of the achievement.
+name
+(string)
+— The primary name of the achievement.
+object
+(string)
+— The objective of the achievement.
+desc
+(string)
+— The flavor text of the achievement.
+o
+(int)
+— The order of this achievement in its category.
+rt
+(int)
+— The rank type of this achievement:
+1 = PERCENTILE
+— ranked by percentile cutoffs (5% Diamond, 10% Platinum, 30% Gold, 50% Silver, 70% Bronze)
+2 = ISSUE
+— always has the ISSUED rank
+3 = ZENITH
+— ranked by QUICK PLAY floors
+4 = PERCENTILELAX
+— ranked by percentile cutoffs (5% Diamond, 20% Platinum, 60% Gold, 100% Silver)
+5 = PERCENTILEVLAX
+— ranked by percentile cutoffs (20% Diamond, 50% Platinum, 100% Gold)
+6 = PERCENTILEMLAX
+— ranked by percentile cutoffs (10% Diamond, 20% Platinum, 50% Gold, 100% Silver)
+7 = PERCENTILEINVARIANT
+— ranked by percentile cutoffs (10% Diamond, 30% Platinum, 50% Gold, 70% Silver, 100% Bronze)
+vt
+(int)
+— The value type of this achievement:
+0 = NONE
+— no value
+1 = NUMBER
+— V is a positive number
+2 = TIME
+— V is a positive amount of milliseconds
+3 = TIME_INV
+— V is a negative amount of milliseconds; negate it before displaying
+4 = FLOOR
+— V is an altitude, A is a floor number
+5 = ISSUE
+— V is the negative time of issue
+6 = NUMBER_INV
+— V is a negative number; negate it before displaying
+art
+(int)
+— The AR type of this achievement:
+0 = UNRANKED
+— no AR is given
+1 = RANKED
+— AR is given for medal ranks
+2 = COMPETITIVE
+— AR is given for medal ranks and leaderboard positions
+min
+(int)
+— The minimum score required to obtain the achievement.
+deci
+(int)
+— The amount of decimal placed to show.
+hidden
+(bool)
+— Whether this achievement is usually not shown.
+nolb
+(bool)
+— Whether this achievement has no leaderboard.
+event
+?
+(string)
+— If applicable, the event this achievement was part of.
+event_past
+?
+(bool)
+— Whether the event described has ended.
+disabled
+?
+(bool)
+— Whether this achievement has been suspended (and will not be awarded).
+pair
+?
+(bool)
+— Whether this achievement is given out pair-wise (two players share a spot, for some Duo achievements).
+In addition, when presenting a user's achievement, additional fields are as follows:
+v
+(float)
+— The achieved score.
+a
+(float?)
+— Additional data (see vt).
+t
+(string)
+— The time the achievement was updated.
+pos
+(int)
+— The zero-indexed position in the achievement's leaderboards.
+total
+(int)
+— The total amount of players who have this achievement (with a value of min or higher).
+rank
+(int)
+— The rank of the achievement:
+0
+= NONE,
+1
+= BRONZE,
+2
+= SILVER,
+3
+= GOLD,
+4
+= PLATINUM,
+5
+= DIAMOND,
+100
+= ISSUED
+x
+?
+(object)
+— Additional data tagged onto the achievement, dependent on achievement type:
+ally
+?
+(object)
+— The player this achievement was obtained with (in Duo):
+_id
+(string)
+— The user's internal ID.
+username
+(string)
+— The user's username.
+role
+(string)
+— The user's role (one of "anon", "user", "bot", "halfmod", "mod", "admin", "sysop", "hidden", "banned").
+country
+(string?)
+— The user's ISO 3166-1 country code, or null if hidden/unknown. Some vanity flags exist.
+supporter
+(bool)
+— Whether this user is currently supporting TETR.IO <3
+avatar_revision
+?
+(int)
+— This user's avatar ID. Get their avatar at
+https://tetr.io/user-content/avatars/{ USERID }.jpg?rv={ AVATAR_REVISION }
+News Data Structure
+News data may be stored in different formats depending on the type of news item. Here's all the types with their data structures.
+▲ New news types may be added at any moment.
+leaderboard
+When a user's new personal best enters a global leaderboard. Seen in the global stream only.
+username
+(string)
+— The username of the person who got the leaderboard spot.
+gametype
+(string)
+— The game mode played.
+rank
+(int)
+— The global rank achieved.
+result
+(float)
+— The result (score or time) achieved.
+replayid
+(string)
+— The replay's shortID.
+personalbest
+When a user gets a personal best. Seen in user streams only.
+username
+(string)
+— The username of the player.
+gametype
+(string)
+— The game mode played.
+result
+(float)
+— The result (score or time) achieved.
+replayid
+(string)
+— The replay's shortID.
+badge
+When a user gets a badge. Seen in user streams only.
+username
+(string)
+— The username of the player.
+type
+(string)
+— The badge's internal ID, and the filename of the badge icon (all PNGs within
+/res/badges/
+)
+label
+(string)
+— The badge's label.
+rankup
+When a user gets a new top rank in TETRA LEAGUE. Seen in user streams only.
+username
+(string)
+— The username of the player.
+rank
+(string)
+— The new rank.
+supporter
+When a user gets TETR.IO Supporter. Seen in user streams only.
+username
+(string)
+— The username of the player.
+supporter_gift
+When a user is gifted TETR.IO Supporter. Seen in user streams only.
+username
+(string)
+— The username of the recipient.

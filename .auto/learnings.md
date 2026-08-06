@@ -65,3 +65,10 @@
 
 ---
 
+## Iteration 9: Eliminate bag.slice + forEach in render
+- **Hypothesis**: `s.bag.slice(0,5)` + `.forEach()` creates array + closure per frame. Replace with direct for-loop on `s.bag[i]`.
+- **Before/After**: frame_ms within noise, eliminates 1 array + 5 closure allocs per frame
+- **Decision**: KEEP ✅ — micro-opt, no regression
+
+---
+

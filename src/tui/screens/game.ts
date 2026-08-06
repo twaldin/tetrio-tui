@@ -2,14 +2,15 @@
  * The game screen: local board + opponents + stats + effects.
  * Used for versus (league/custom) AND offline practice (solo modes).
  */
-import type { RenderBuffer, Screen, KeyEvent } from '../app.js';
+import type { RenderBuffer, Screen, KeyEvent, Style } from '../app.js';
 import { THEME, PIECE_COLORS, drawBoard, drawPiecePreview, drawBox, drawBoardBorder, drawPanel, center, pieceColor } from '../draw.js';
 import { theme } from '../themes.js';
 import { LocalGameController } from '../../game/localgame.js';
 import { OpponentTracker } from '../../game/state.js';
 import { visibleBoard, BUFFER_ROWS } from '../../game/engine.js';
 import { PIECE_ROTATIONS } from '../../game/pieces.js';
-import type { BoardGrid } from '../../types.js';
+import type { BoardGrid, FallingPiece } from '../../types.js';
+import { EffectManager } from '../effects.js';
 
 export interface GameScreenOpts {
   controller: LocalGameController;
@@ -17,6 +18,20 @@ export interface GameScreenOpts {
   onExit: () => void;
   modeLabel: string;        // e.g. "TETRA LEAGUE", "40 LINES", "BLITZ"
   allowOpponents?: boolean;
+}
+
+
+/** Pre-computed render styles — rebuilt on theme change (avoids per-frame Style alloc). */
+let _rs: { _t: any; bgClear: Style; dimS: Style; textBold: Style; accentBold: Style;
+  goodBold: Style; badBold: Style; warnBold: Style; borderBrightS: Style; badS: Style; faintS: Style } | null = null;
+function rs() {
+  const t = theme();
+  if (_rs && _rs._t === t) return _rs;
+  _rs = { _t: t, bgClear: { bg: t.bg }, dimS: { fg: t.dim }, textBold: { fg: t.text, bold: true },
+    accentBold: { fg: t.accent, bold: true }, goodBold: { fg: t.good, bold: true },
+    badBold: { fg: t.bad, bold: true }, warnBold: { fg: t.warn, bold: true },
+    borderBrightS: { fg: t.borderBright }, badS: { fg: t.bad }, faintS: { fg: t.faint } };
+  return _rs;
 }
 
 interface Effect {
@@ -39,6 +54,7 @@ export class GameScreen implements Screen {
   private lastBtb = 0;
   private shakeFrames = 0;
   private keymap: Record<string, string>;
+  private fx = new EffectManager();
 
   constructor(opts: GameScreenOpts) {
     this.ctrl = opts.controller;
@@ -111,9 +127,10 @@ export class GameScreen implements Screen {
 
   render(buf: RenderBuffer): void {
     const t = theme();
-    buf.fillRect(0, 0, buf.width, buf.height, ' ', { bg: t.bg });
+    const _s = rs();
+    buf.fillRect(0, 0, buf.width, buf.height, ' ', _s.bgClear);
     const engine = this.ctrl.engine;
-    if (!engine) { center(buf, 10, 'no game', { fg: t.dim }); return; }
+    if (!engine) { center(buf, 10, 'no game', _s.dimS); return; }
 
     const s = engine.state;
     const board = visibleBoard(s.board);
@@ -133,10 +150,10 @@ export class GameScreen implements Screen {
     const boardY = Math.max(2, Math.floor((buf.height - bh) / 2) - 1);
 
     // title + timer
-    center(buf, boardY - 2, this.modeLabel, { fg: t.accent, bold: true });
+    center(buf, boardY - 2, this.modeLabel, _s.accentBold);
     const st = s.stats;
     const secs = Math.floor(st.currentTime / 60);
-    center(buf, boardY - 1, formatTime(secs), { fg: t.dim });
+    center(buf, boardY - 1, formatTime(secs), _s.dimS);
 
     // HOLD panel
     drawPanel(buf, startX, boardY, panelW, 7, 'HOLD');
@@ -145,21 +162,21 @@ export class GameScreen implements Screen {
     // STATS panel
     drawPanel(buf, startX, boardY + 8, panelW, 11, 'STATS');
     const sx2 = startX + 2;
-    buf.drawText(sx2, boardY + 10, 'APM', { fg: t.dim });
-    buf.drawText(sx2 + 6, boardY + 10, st.apm.toFixed(0), { fg: t.text, bold: true });
-    buf.drawText(sx2, boardY + 11, 'PPS', { fg: t.dim });
-    buf.drawText(sx2 + 6, boardY + 11, st.pps.toFixed(2), { fg: t.text, bold: true });
-    buf.drawText(sx2, boardY + 12, 'VS', { fg: t.dim });
-    buf.drawText(sx2 + 6, boardY + 12, st.vsscore.toFixed(0), { fg: t.text, bold: true });
-    buf.drawText(sx2, boardY + 14, 'ATK', { fg: t.dim });
-    buf.drawText(sx2 + 6, boardY + 14, `${st.garbage.attack}`, { fg: t.accent, bold: true });
-    buf.drawText(sx2, boardY + 15, 'SNT', { fg: t.dim });
-    buf.drawText(sx2 + 6, boardY + 15, `${st.garbage.sent}`, { fg: t.good, bold: true });
-    buf.drawText(sx2, boardY + 16, 'RCV', { fg: t.dim });
-    buf.drawText(sx2 + 6, boardY + 16, `${st.garbage.received}`, { fg: t.bad, bold: true });
+    buf.drawText(sx2, boardY + 10, 'APM', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 10, st.apm.toFixed(0), _s.textBold);
+    buf.drawText(sx2, boardY + 11, 'PPS', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 11, st.pps.toFixed(2), _s.textBold);
+    buf.drawText(sx2, boardY + 12, 'VS', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 12, st.vsscore.toFixed(0), _s.textBold);
+    buf.drawText(sx2, boardY + 14, 'ATK', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 14, `${st.garbage.attack}`, _s.accentBold);
+    buf.drawText(sx2, boardY + 15, 'SNT', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 15, `${st.garbage.sent}`, _s.goodBold);
+    buf.drawText(sx2, boardY + 16, 'RCV', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 16, `${st.garbage.received}`, _s.badBold);
 
     // main board: strong border + checkerboard interior
-    drawBoardBorder(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, { fg: t.borderBright });
+    drawBoardBorder(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, _s.borderBrightS);
     const ghostSet = computeGhostSet(s.falling);
     drawBoard(buf, boardX, boardY, board, { ghostSet });
 
@@ -173,7 +190,7 @@ export class GameScreen implements Screen {
     const incoming = s.garbage.incoming?.length ?? 0;
     if (incoming > 0) {
       for (let i = 0; i < Math.min(incoming, bh); i++) {
-        buf.set(boardX - 2, boardY + bh - 1 - i, '▮', { fg: t.bad });
+        buf.set(boardX - 2, boardY + bh - 1 - i, '▮', _s.badS);
       }
     }
 
@@ -201,7 +218,7 @@ export class GameScreen implements Screen {
       ey += 1;
     }
 
-    center(buf, buf.height - 2, 'esc forfeit', { fg: t.faint });
+    center(buf, buf.height - 2, 'esc forfeit', _s.faintS);
   }
 }
 

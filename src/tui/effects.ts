@@ -343,9 +343,7 @@ export class EffectManager {
     if (e.age >= opacities.length) return;
     const opacity = opacities[e.age];
     const t = theme();
-    const trailFg = dimRGB(e.color, opacity);
-    // Background: blend piece color into board color for a colored stripe
-    const trailBg = lerpRGB(t.boardA, e.color, opacity * 0.35);
+    // Trail rendering uses per-row gradient (computed in loop)
     for (const [col, startRow, endRow] of e.trails) {
       const px = bx + col * 2;
       for (let row = startRow; row < endRow; row++) {
@@ -356,8 +354,8 @@ export class EffectManager {
           const rowOpacity = opacity * (0.3 + 0.7 * rowProgress);
           const rowFg = dimRGB(e.color, rowOpacity);
           const rowBg = lerpRGB(t.boardA, e.color, rowOpacity * 0.3);
-          buf.set(px, py, '▕', { fg: rowFg, bg: rowBg });
-          buf.set(px + 1, py, '▏', { fg: rowFg, bg: rowBg });
+          buf.set(px, py, '░', { fg: rowFg, bg: rowBg });
+          buf.set(px + 1, py, '░', { fg: rowFg, bg: rowBg });
         }
       }
     }

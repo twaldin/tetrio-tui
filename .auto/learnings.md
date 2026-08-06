@@ -49,3 +49,11 @@
 
 ---
 
+## Iteration 7: Optimize present() in driver.ts
+- **Hypothesis**: present() creates new CellBuffer + 3740 spread copies every frame, uses O(n²) string concatenation for output.
+- **Changes**: Reuse front buffer with in-place field copy; use string array + join instead of repeated string concat.
+- **Impact on benchmark**: None (bench doesn't measure present()). No regression in render metrics.
+- **Decision**: KEEP ✅ — eliminates major allocation hotspot in the real rendering pipeline
+
+---
+

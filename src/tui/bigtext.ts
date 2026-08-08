@@ -1,148 +1,85 @@
 /**
- * Big ASCII-art font renderer for tetrio-tui.
+ * Big ASCII-art text renderer for tetrio-tui.
  *
- * Renders text as big blocky glyphs using Unicode full-block characters (█).
- * Two sizes: 'big' (5 rows) and 'small' (4 rows).
- * Each "pixel" in the glyph is rendered as a full block character.
+ * Uses a REAL Figlet font (the classic "small" font by Glenn Chappell, parsed from
+ * small.flf) — actual ASCII-art glyphs made of / \ _ | . characters, not hand-drawn
+ * block bitmaps. This is far more legible than the previous custom bitmap font.
  *
- * Zero allocations in render path — glyph data is static bitmaps.
+ * Zero allocations in the render path — glyph data is static strings.
  */
 import type { RenderBuffer, Style, RGB } from '../tui/app.js';
 
-// ---------------------------------------------------------------------------
-// Glyph definitions — binary bitmaps
-// 'big' glyphs: 5 rows tall, up to 5 columns wide (each col = 1 terminal char)
-// 'small' glyphs: 4 rows tall, up to 4 columns wide
-// 1 = filled, 0 = empty
-// ---------------------------------------------------------------------------
-
-type BigGlyph = number[][]; // rows of column flags
-
-const BIG: Record<string, BigGlyph> = {
-  // Letters — 5 rows × 4-5 cols
-  'A': [[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],
-  'B': [[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,1],[1,1,1,0]],
-  'C': [[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],
-  'D': [[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],
-  'E': [[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]],
-  'F': [[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,0,0,0]],
-  'G': [[0,1,1,1],[1,0,0,0],[1,0,1,1],[1,0,0,1],[0,1,1,1]],
-  'H': [[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],
-  'I': [[1,1,1],[0,1,0],[0,1,0],[0,1,0],[1,1,1]],
-  'J': [[0,0,1],[0,0,1],[0,0,1],[1,0,1],[0,1,0]],
-  'K': [[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],
-  'L': [[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],
-  'M': [[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1],[1,0,0,0,1]],
-  'N': [[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],
-  'O': [[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],
-  'P': [[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,0,0],[1,0,0,0]],
-  'Q': [[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,1,0],[0,1,0,1]],
-  'R': [[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],
-  'S': [[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],
-  'T': [[1,1,1,1,1],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0]],
-  'U': [[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],
-  'V': [[1,0,0,0,1],[1,0,0,0,1],[0,1,0,1,0],[0,1,0,1,0],[0,0,1,0,0]],
-  'W': [[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,1,0,1,1],[1,0,0,0,1]],
-  'X': [[1,0,0,1],[0,1,1,0],[0,1,1,0],[0,1,1,0],[1,0,0,1]],
-  'Y': [[1,0,0,0,1],[0,1,0,1,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0]],
-  'Z': [[1,1,1,1],[0,0,1,0],[0,1,0,0],[1,0,0,0],[1,1,1,1]],
-  // Numbers
-  '0': [[0,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[0,1,1,0]],
-  '1': [[0,1,0],[1,1,0],[0,1,0],[0,1,0],[1,1,1]],
-  '2': [[0,1,1,0],[1,0,0,1],[0,0,1,0],[0,1,0,0],[1,1,1,1]],
-  '3': [[1,1,1,0],[0,0,0,1],[0,1,1,0],[0,0,0,1],[1,1,1,0]],
-  '4': [[1,0,0,1],[1,0,0,1],[1,1,1,1],[0,0,0,1],[0,0,0,1]],
-  '5': [[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],
-  '6': [[0,1,1,0],[1,0,0,0],[1,1,1,0],[1,0,0,1],[0,1,1,0]],
-  '7': [[1,1,1,1],[0,0,0,1],[0,0,1,0],[0,1,0,0],[0,1,0,0]],
-  '8': [[0,1,1,0],[1,0,0,1],[0,1,1,0],[1,0,0,1],[0,1,1,0]],
-  '9': [[0,1,1,0],[1,0,0,1],[0,1,1,1],[0,0,0,1],[0,1,1,0]],
-  // Symbols
-  '+': [[0,0,0],[0,1,0],[1,1,1],[0,1,0],[0,0,0]],
-  '-': [[0,0,0],[0,0,0],[1,1,1],[0,0,0],[0,0,0]],
-  '!': [[0,1,0],[0,1,0],[0,1,0],[0,0,0],[0,1,0]],
-  '×': [[0,0,0],[1,0,1],[0,1,0],[1,0,1],[0,0,0]],
-  ' ': [[0,0],[0,0],[0,0],[0,0],[0,0]],
-  '.': [[0,0],[0,0],[0,0],[0,0],[0,1]],
-  ':': [[0],[1],[0],[1],[0]],
-  '★': [[0,0,1,0,0],[1,1,1,1,1],[0,1,1,1,0],[1,0,0,0,1],[0,0,0,0,0]],
+// Figlet "small" font glyphs (flf2a$, height 5). Each glyph is 5 rows of ASCII art.
+const GLYPHS: Record<string, string[]> = {
+  " ": ["", "", "", "", ""],
+  "!": ["  _", " | |", " |_|", " (_)", ""],
+  "+": ["    _", "  _| |_", " |_   _|", "   |_|", ""],
+  "-": ["", "  ___", " |___|", "", ""],
+  ".": ["", "", "  _", " (_)", ""],
+  "0": ["   __", "  /  \\", " | () |", "  \\__/", ""],
+  "1": ["  _", " / |", " | |", " |_|", ""],
+  "2": ["  ___", " |_  )", "  / /", " /___|", ""],
+  "3": ["  ____", " |__ /", "  |_ \\", " |___/", ""],
+  "4": ["  _ _", " | | |", " |_  _|", "   |_|", ""],
+  "5": ["  ___", " | __|", " |__ \\", " |___/", ""],
+  "6": ["   __", "  / /", " / _ \\", " \\___/", ""],
+  "7": ["  ____", " |__  |", "   / /", "  /_/", ""],
+  "8": ["  ___", " ( _ )", " / _ \\", " \\___/", ""],
+  "9": ["  ___", " / _ \\", " \\_, /", "  /_/", ""],
+  ":": ["  _", " (_)", "  _", " (_)", ""],
+  "A": ["    _", "   /_\\", "  / _ \\", " /_/ \\_\\", ""],
+  "B": ["  ___", " | _ )", " | _ \\", " |___/", ""],
+  "C": ["   ___", "  / __|", " | (__", "  \\___|", ""],
+  "D": ["  ___", " |   \\", " | |) |", " |___/", ""],
+  "E": ["  ___", " | __|", " | _|", " |___|", ""],
+  "F": ["  ___", " | __|", " | _|", " |_|", ""],
+  "G": ["   ___", "  / __|", " | (_ |", "  \\___|", ""],
+  "H": ["  _  _", " | || |", " | __ |", " |_||_|", ""],
+  "I": ["  ___", " |_ _|", "  | |", " |___|", ""],
+  "J": ["     _", "  _ | |", " | || |", "  \\__/", ""],
+  "K": ["  _  __", " | |/ /", " | ' <", " |_|\\_\\", ""],
+  "L": ["  _", " | |", " | |__", " |____|", ""],
+  "M": ["  __  __", " |  \\/  |", " | |\\/| |", " |_|  |_|", ""],
+  "N": ["  _  _", " | \\| |", " | .` |", " |_|\\_|", ""],
+  "O": ["   ___", "  / _ \\", " | (_) |", "  \\___/", ""],
+  "P": ["  ___", " | _ \\", " |  _/", " |_|", ""],
+  "Q": ["   ___", "  / _ \\", " | (_) |", "  \\__\\_\\", ""],
+  "R": ["  ___", " | _ \\", " |   /", " |_|_\\", ""],
+  "S": ["  ___", " / __|", " \\__ \\", " |___/", ""],
+  "T": ["  _____", " |_   _|", "   | |", "   |_|", ""],
+  "U": ["  _   _", " | | | |", " | |_| |", "  \\___/", ""],
+  "V": [" __   __", " \\ \\ / /", "  \\ V /", "   \\_/", ""],
+  "W": [" __      __", " \\ \\    / /", "  \\ \\/\\/ /", "   \\_/\\_/", ""],
+  "X": [" __  __", " \\ \\/ /", "  >  <", " /_/\\_\\", ""],
+  "Y": [" __   __", " \\ \\ / /", "  \\ V /", "   |_|", ""],
+  "Z": ["  ____", " |_  /", "  / /", " /___|", ""],
 };
 
-const SMALL: Record<string, BigGlyph> = {
-  // Letters — 4 rows tall (legible)
-  'A': [[0,1,0],[1,0,1],[1,1,1],[1,0,1]],
-  'B': [[1,1,0],[1,0,1],[1,1,0],[1,1,1]],
-  'C': [[0,1,1],[1,0,0],[1,0,0],[0,1,1]],
-  'D': [[1,1,0],[1,0,1],[1,0,1],[1,1,0]],
-  'E': [[1,1,1],[1,0,0],[1,1,0],[1,1,1]],
-  'F': [[1,1,1],[1,0,0],[1,1,0],[1,0,0]],
-  'G': [[0,1,1],[1,0,0],[1,0,1],[0,1,1]],
-  'H': [[1,0,1],[1,0,1],[1,1,1],[1,0,1]],
-  'I': [[1,1,1],[0,1,0],[0,1,0],[1,1,1]],
-  'J': [[0,0,1],[0,0,1],[0,0,1],[1,1,0]],
-  'K': [[1,0,1],[1,1,0],[1,1,0],[1,0,1]],
-  'L': [[1,0,0],[1,0,0],[1,0,0],[1,1,1]],
-  'M': [[1,0,0,0,1],[1,1,0,1,1],[1,0,1,0,1],[1,0,0,0,1]],
-  'N': [[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1]],
-  'O': [[0,1,0],[1,0,1],[1,0,1],[0,1,0]],
-  'P': [[1,1,0],[1,0,1],[1,1,0],[1,0,0]],
-  'Q': [[0,1,0],[1,0,1],[1,0,1],[0,1,1]],
-  'R': [[1,1,0],[1,0,1],[1,1,0],[1,0,1]],
-  'S': [[0,1,1],[1,0,0],[0,1,0],[1,1,0]],
-  'T': [[1,1,1],[0,1,0],[0,1,0],[0,1,0]],
-  'U': [[1,0,1],[1,0,1],[1,0,1],[1,1,1]],
-  'V': [[1,0,1],[1,0,1],[1,0,1],[0,1,0]],
-  'W': [[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[0,1,0,1,0]],
-  'X': [[1,0,1],[1,0,1],[0,1,0],[1,0,1]],
-  'Y': [[1,0,1],[1,0,1],[0,1,0],[0,1,0]],
-  'Z': [[1,1,1],[0,0,1],[0,1,0],[1,1,1]],
-  // Numbers — 4 rows
-  '0': [[0,1,0],[1,0,1],[1,0,1],[0,1,0]],
-  '1': [[0,1,0],[1,1,0],[0,1,0],[1,1,1]],
-  '2': [[1,1,0],[0,0,1],[0,1,0],[1,1,1]],
-  '3': [[1,1,0],[0,0,1],[0,1,0],[1,1,0]],
-  '4': [[1,0,1],[1,0,1],[1,1,1],[0,0,1]],
-  '5': [[1,1,1],[1,0,0],[1,1,1],[0,0,1]],
-  '6': [[0,1,1],[1,0,0],[1,1,0],[0,1,0]],
-  '7': [[1,1,1],[0,0,1],[0,1,0],[0,1,0]],
-  '8': [[0,1,0],[1,0,1],[0,1,0],[1,0,1]],
-  '9': [[0,1,0],[1,0,1],[0,1,1],[0,0,1]],
-  // Symbols — 4 rows
-  '+': [[0,0,0],[0,1,0],[1,1,1],[0,1,0]],
-  '-': [[0,0,0],[0,0,0],[1,1,1],[0,0,0]],
-  '!': [[0,1,0],[0,1,0],[0,0,0],[0,1,0]],
-  '×': [[1,0,1],[0,1,0],[1,0,1],[0,0,0]],
-  ' ': [[0],[0],[0],[0]],
-  '.': [[0,0],[0,0],[0,0],[0,1]],
-  ':': [[0],[1],[0],[1]],
-  '★': [[0,1,0],[1,1,1],[0,1,0],[1,0,1]],
-};
+const GLYPH_HEIGHT = 5;
+const GLYPH_GAP = 1;
 
-/** Get the width of a glyph in columns. */
-function glyphWidth(g: BigGlyph): number {
-  return g[0]?.length ?? 0;
+/** Get the rendered width of a glyph in columns (max row length). */
+function glyphWidth(g: string[]): number {
+  let w = 0;
+  for (const r of g) w = Math.max(w, r.length);
+  return w;
 }
 
-/** Measure the total width of a big-text string (including 1-col gaps between chars). */
-export function measureBigText(text: string, size: 'big' | 'small' = 'big'): { width: number; height: number } {
-  const glyphs = size === 'big' ? BIG : SMALL;
-  const height = size === 'big' ? 5 : 4;
+/** Measure the total width of a big-text string (including gaps between chars). */
+export function measureBigText(text: string, _size: 'big' | 'small' = 'big'): { width: number; height: number } {
   let width = 0;
   for (let i = 0; i < text.length; i++) {
-    const ch = text[i].toUpperCase();
-    const g = glyphs[ch];
-    if (g) {
-      if (i > 0) width += 1; // gap between chars
-      width += glyphWidth(g);
-    }
+    const g = GLYPHS[text[i].toUpperCase()];
+    if (!g) { width += 2; continue; }
+    if (i > 0) width += GLYPH_GAP;
+    width += glyphWidth(g);
   }
-  return { width, height };
+  return { width, height: GLYPH_HEIGHT };
 }
 
 /**
- * Render big text into a RenderBuffer at position (x, y).
- * Each filled pixel is rendered as a '█' character.
- * Returns the total width consumed.
+ * Render big text at (x, y). Returns the rendered width.
+ * Draws each glyph's ASCII-art rows; spaces are transparent.
  */
 export function renderBigText(
   buf: RenderBuffer,
@@ -150,24 +87,19 @@ export function renderBigText(
   y: number,
   text: string,
   style: Style,
-  size: 'big' | 'small' = 'big',
+  _size: 'big' | 'small' = 'big',
 ): number {
-  const glyphs = size === 'big' ? BIG : SMALL;
-  const rows = size === 'big' ? 5 : 4;
   let cx = x;
-
   for (let i = 0; i < text.length; i++) {
     const ch = text[i].toUpperCase();
-    const g = glyphs[ch];
-    if (!g) continue;
-    if (i > 0) cx += 1; // gap between chars
-
-    for (let row = 0; row < rows && row < g.length; row++) {
-      const glyphRow = g[row];
-      for (let col = 0; col < glyphRow.length; col++) {
-        if (glyphRow[col]) {
-          buf.set(cx + col, y + row, '█', style);
-        }
+    const g = GLYPHS[ch];
+    if (!g) { cx += 2; continue; }
+    if (i > 0) cx += GLYPH_GAP;
+    for (let row = 0; row < g.length; row++) {
+      const line = g[row];
+      for (let col = 0; col < line.length; col++) {
+        const c = line[col];
+        if (c !== ' ') buf.set(cx + col, y + row, c, style);
       }
     }
     cx += glyphWidth(g);
@@ -175,37 +107,27 @@ export function renderBigText(
   return cx - x;
 }
 
-/**
- * Render big text centered horizontally within a given width.
- * Returns the actual x position where text started.
- */
+/** Render big text centered horizontally at cx. Returns the start x. */
 export function renderBigTextCentered(
   buf: RenderBuffer,
-  centerX: number,
+  cx: number,
   y: number,
   text: string,
   style: Style,
   size: 'big' | 'small' = 'big',
-  _maxWidth?: number,
 ): number {
-  const measured = measureBigText(text, size);
-  const startX = centerX - Math.floor(measured.width / 2);
+  const { width } = measureBigText(text, size);
+  const startX = cx - Math.floor(width / 2);
   renderBigText(buf, startX, y, text, style, size);
   return startX;
 }
 
-/**
- * Choose the appropriate big-text size based on combo count.
- * Low combos: small (3 rows), high combos: big (5 rows).
- */
-export function comboSize(combo: number): 'big' | 'small' {
-  return combo >= 5 ? 'big' : 'small';
+/** Combo number size helper — kept for API compatibility (single font now). */
+export function comboSize(_combo: number): 'big' | 'small' {
+  return 'small';
 }
 
-/**
- * Render a combo counter with scaling size.
- * Shows "COMBO" label + big number that grows with combo count.
- */
+/** Render a combo counter as a simple "COMBO x3" text line (no big ASCII number). */
 export function renderComboCounter(
   buf: RenderBuffer,
   x: number,
@@ -214,26 +136,12 @@ export function renderComboCounter(
   color: RGB,
   accentColor: RGB,
 ): { width: number; height: number } {
-  const size = comboSize(combo);
-  const numStr = String(combo);
-  const label = 'COMBO';
-
-  // Label on top row
-  const labelStyle: Style = { fg: accentColor, bold: true };
-  buf.drawText(x, y, label, labelStyle);
-
-  // Big number below label
-  const numY = y + 1;
-  const numStyle: Style = { fg: color, bold: true };
-  const numWidth = renderBigText(buf, x, numY, numStr, numStyle, size);
-  const height = 1 + (size === 'big' ? 5 : 4);
-
-  return { width: Math.max(label.length, numWidth), height };
+  const label = `COMBO x${combo}`;
+  buf.drawText(x, y, label, { fg: color, bold: true });
+  return { width: label.length, height: 1 };
 }
 
-/**
- * Render a B2B (back-to-back) counter with big text.
- */
+/** Render a B2B (back-to-back) counter as a simple text line. */
 export function renderB2BCounter(
   buf: RenderBuffer,
   x: number,
@@ -241,21 +149,12 @@ export function renderB2BCounter(
   b2b: number,
   color: RGB,
 ): { width: number; height: number } {
-  const label = 'B2B';
-  const numStr = String(b2b);
-
-  // Label
+  const label = `B2B x${b2b}`;
   buf.drawText(x, y, label, { fg: color, bold: true });
-
-  // Counter below
-  const numY = y + 1;
-  const numWidth = renderBigText(buf, x, numY, numStr, { fg: color }, 'small');
-  return { width: Math.max(label.length, numWidth), height: 4 };
+  return { width: label.length, height: 1 };
 }
 
-/**
- * Render a clear-type label in big text (SINGLE, DOUBLE, TRIPLE, TETRIS, T-SPIN, etc.)
- */
+/** Render a clear-type label (SINGLE, DOUBLE, ...) in the Figlet font. */
 export function renderClearLabel(
   buf: RenderBuffer,
   x: number,

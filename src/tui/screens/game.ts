@@ -12,7 +12,7 @@ import { bestPlacement } from '../../game/solver.js';
 import { PIECE_ROTATIONS } from '../../game/pieces.js';
 import type { BoardGrid, FallingPiece } from '../../types.js';
 import { EffectManager } from '../effects.js';
-import { renderBigTextCentered } from '../bigtext.js';
+import { renderBigTextCentered, measureBigText } from '../bigtext.js';
 import { playClear, playTSpin, playCombo, playHardDrop, playAllClear, playB2B } from '../sound.js';
 
 export interface GameScreenOpts {
@@ -268,18 +268,26 @@ export class GameScreen implements Screen {
       // Shake for clears
       const clearMag = isTetris ? 'heavy' : pc.lines >= 3 ? 'medium' : 'light';
       this.fx.spawnShake(clearMag, 0, 1);
-      // Big text: clear type to the LEFT of the board (out of the way of the pieces).
+      // Big clear-type popup: real Figlet font, placed OFF the play area at a random
+      // corner/top so it never covers the pieces. One at a time (spawn replaces old).
       const clearLabel = clearText(pc as any);
       const clearColor = isTetris ? t.warn : pc.tspin ? t.accent : t.text;
-      const actionX = -1; // -1 = centered on the board
-      const actionY = boardY + 2; // over the (empty) top of the board during a clear
-      const textSize = 'small'; // small (3 rows) is legible without dominating the board
-      this.fx.spawnBigText(clearLabel, clearColor as RGB, actionX, actionY, textSize as 'big' | 'small', true, 0);
-      // Attack amount popup (small, only for meaningful attacks, below the clear label)
+      const textW = measureBigText(clearLabel).width;
+      const GLYPH_H = 5;
+      const margin = 2;
+      const spots = [
+        { x: margin, y: 1 },                                            // top-left
+        { x: buf.width - textW - margin, y: 1 },                        // top-right
+        { x: margin, y: buf.height - GLYPH_H - 1 },                     // bottom-left
+        { x: buf.width - textW - margin, y: buf.height - GLYPH_H - 1 }, // bottom-right
+      ].filter((s) => s.x >= 0 && s.x + textW <= buf.width - 1);
+      const spot = spots.length ? spots[(Math.random() * spots.length) | 0] : { x: margin, y: 1 };
+      this.fx.spawnBigText(clearLabel, clearColor as RGB, spot.x, spot.y, 'small', true, 0);
+      // Attack amount popup (small, only for meaningful attacks, just below the clear label)
       if (pc.attack >= 2) {
         const atkText = `+${pc.attack}`;
         const atkColor: RGB = pc.attack >= 4 ? [255, 100, 100] : [255, 200, 100];
-        this.fx.spawnPopup(atkText, atkColor, actionX, actionY + 4, true, 1);
+        this.fx.spawnPopup(atkText, atkColor, spot.x, spot.y + GLYPH_H, true, 0);
       }
     }
     if (this._pendingAllClear) {

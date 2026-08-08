@@ -287,7 +287,10 @@ export class EffectManager {
     riseSpeed = 1,
   ): void {
     if (_animIntensity === 0) return;
-    const life = Math.max(1, Math.round(40 * _animIntensity / 100));
+    // ONE big text at a time — a new popup immediately replaces any existing one
+    // (matches TETR.IO: "new clears replace the text immediately", no overlap).
+    this.effects = this.effects.filter((e) => e.kind !== 'bigText');
+    const life = Math.max(1, Math.round(26 * _animIntensity / 100)); // faster fade than before
     this.effects.push({
       kind: 'bigText', age: 0, life, text, color,
       absX, startY, size, riseSpeed, flash,
@@ -596,12 +599,12 @@ export class EffectManager {
     const py = e.startY - drift;
     if (py < 0 || py + 3 >= buf.height) return;
 
-    // Fade
-    const fadeStart = life * 0.5;
+    // Fade — stay bright ~62% then fade out quickly
+    const fadeStart = life * 0.62;
     let color = e.color;
     if (age > fadeStart) {
       const fadeProg = (age - fadeStart) / (life - fadeStart);
-      color = dimRGB(e.color, 1 - fadeProg * 0.85);
+      color = dimRGB(e.color, 1 - fadeProg * 0.9);
     }
 
     // Flash effect on first frames
@@ -637,15 +640,8 @@ export class EffectManager {
       color = brightenRGB(color, 1 + (1 - age / 3) * 0.6);
     }
 
-    // "COMBO" label
-    const labelColor = dimRGB(color, 0.7);
-    buf.drawText(zoneX, zoneY, 'COMBO', { fg: labelColor, bold: true });
-
-    // Big combo number — size grows with combo
-    const size = comboSize(combo);
-    const numStr = String(combo);
-    const numStyle: Style = { fg: color, bold: true };
-    renderBigText(buf, zoneX, zoneY + 1, numStr, numStyle, size);
+    // Simple "COMBO x3" text line (no big ASCII number)
+    buf.drawText(zoneX, zoneY, `COMBO x${combo}`, { fg: color, bold: true });
   }
 
   private _renderB2BZone(buf: RenderBuffer, e: B2BZoneEffect): void {
@@ -662,12 +658,8 @@ export class EffectManager {
       color = brightenRGB(color, 1 + (1 - age / 3) * 0.4);
     }
 
-    // "B2B" label
-    buf.drawText(zoneX, zoneY, 'B2B', { fg: dimRGB(color, 0.7), bold: true });
-
-    // B2B number in small big-text
-    const numStr = String(b2b);
-    renderBigText(buf, zoneX, zoneY + 1, numStr, { fg: color, bold: true }, 'small');
+    // Simple "B2B x2" text line
+    buf.drawText(zoneX, zoneY, `B2B x${b2b}`, { fg: color, bold: true });
   }
 
   private _renderGarbageIndicator(

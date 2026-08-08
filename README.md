@@ -28,6 +28,8 @@ engine (SRS+ kicks, Park-Miller RNG, exact versus attack/garbage tables).
 
 ![tetrio-tui demo](docs/demo.gif)
 
+Higher-quality MP4: [docs/demo.mp4](docs/demo.mp4)
+
 ## Install & run
 
 ```bash

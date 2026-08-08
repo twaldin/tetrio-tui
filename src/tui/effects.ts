@@ -136,6 +136,8 @@ interface BigTextEffect {
   riseSpeed: number;
   /** Flash: first few frames are brighter */
   flash: boolean;
+  /** Diagonal (staircase) slant, like the real game's tilted action text */
+  diagonal?: boolean;
 }
 
 interface ComboZoneEffect {
@@ -285,6 +287,7 @@ export class EffectManager {
     size: 'big' | 'small' = 'small',
     flash = true,
     riseSpeed = 1,
+    diagonal = false,
   ): void {
     if (_animIntensity === 0) return;
     // ONE big text at a time — a new popup immediately replaces any existing one
@@ -293,7 +296,7 @@ export class EffectManager {
     const life = Math.max(1, Math.round(26 * _animIntensity / 100)); // faster fade than before
     this.effects.push({
       kind: 'bigText', age: 0, life, text, color,
-      absX, startY, size, riseSpeed, flash,
+      absX, startY, size, riseSpeed, flash, diagonal,
     });
   }
 
@@ -593,7 +596,7 @@ export class EffectManager {
   }
 
   private _renderBigText(buf: RenderBuffer, e: BigTextEffect, bx: number, by: number, boardW: number): void {
-    const { age, life, text, size, flash, riseSpeed } = e;
+    const { age, life, text, size, flash, riseSpeed, diagonal } = e;
     // Rise
     const drift = Math.floor(age * riseSpeed / 10);
     const py = e.startY - drift;
@@ -618,9 +621,9 @@ export class EffectManager {
     if (e.absX === -1) {
       // Center on board
       const boardCenterX = bx + Math.floor(boardW * 2 / 2);
-      renderBigTextCentered(buf, boardCenterX, py, text, style, size);
+      renderBigTextCentered(buf, boardCenterX, py, text, style, size, diagonal);
     } else {
-      renderBigText(buf, e.absX, py, text, style, size);
+      renderBigText(buf, e.absX, py, text, style, size, diagonal);
     }
   }
 
@@ -640,8 +643,11 @@ export class EffectManager {
       color = brightenRGB(color, 1 + (1 - age / 3) * 0.6);
     }
 
-    // Simple "COMBO x3" text line (no big ASCII number)
-    buf.drawText(zoneX, zoneY, `COMBO x${combo}`, { fg: color, bold: true });
+    // Combo display: "COMBO" label + a BLOCKY combo number that GROWS in size as the
+    // combo builds (small font at low combo, big blocky + diagonal slant at high combo).
+    buf.drawText(zoneX, zoneY, 'COMBO', { fg: dimRGB(color, 0.7), bold: true });
+    const size = comboSize(combo); // 'small' then 'big' as it grows
+    renderBigText(buf, zoneX, zoneY + 1, String(combo), { fg: color, bold: true }, size, size === 'big');
   }
 
   private _renderB2BZone(buf: RenderBuffer, e: B2BZoneEffect): void {
@@ -658,8 +664,9 @@ export class EffectManager {
       color = brightenRGB(color, 1 + (1 - age / 3) * 0.4);
     }
 
-    // Simple "B2B x2" text line
-    buf.drawText(zoneX, zoneY, `B2B x${b2b}`, { fg: color, bold: true });
+    // B2B indicator: "B2B" label + a blocky number (smaller than the combo)
+    buf.drawText(zoneX, zoneY, 'B2B', { fg: dimRGB(color, 0.7), bold: true });
+    renderBigText(buf, zoneX, zoneY + 1, `x${b2b}`, { fg: color, bold: true }, 'small', false);
   }
 
   private _renderGarbageIndicator(

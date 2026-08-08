@@ -34,11 +34,20 @@ export interface KeyEvent {
   type: 'down' | 'up';
 }
 
+export interface MouseEvent {
+  kind: 'mouse';
+  action: 'down' | 'up' | 'scroll-up' | 'scroll-down' | 'move';
+  x: number;               // 0-based column (buffer coordinates)
+  y: number;               // 0-based row (buffer coordinates)
+  button?: 'left' | 'middle' | 'right';
+}
+
 export interface Screen {
   readonly name: string;
   onShow?(): void;
   onHide?(): void;
   onKey?(ev: KeyEvent): void;
+  onMouse?(ev: MouseEvent): void;
   update?(dtMs: number): void;
   render(buf: RenderBuffer): void;
 }
@@ -47,6 +56,7 @@ export interface AppDriver {
   buffer(): RenderBuffer;
   present(): void;
   onKey(cb: (ev: KeyEvent) => void): void;
+  onMouse(cb: (ev: MouseEvent) => void): void;
   onResize(cb: (w: number, h: number) => void): void;
   size(): { width: number; height: number };
   stop(): void;
@@ -64,6 +74,7 @@ export class App {
   constructor(driver: AppDriver) {
     this.driver = driver;
     driver.onKey((ev) => this.handleKey(ev));
+    driver.onMouse((ev) => this.handleMouse(ev));
     driver.onResize(() => { this.needsRender = true; });
   }
 
@@ -88,6 +99,11 @@ export class App {
 
   private handleKey(ev: KeyEvent): void {
     this.top()?.onKey?.(ev);
+    this.needsRender = true;
+  }
+
+  private handleMouse(ev: MouseEvent): void {
+    this.top()?.onMouse?.(ev);
     this.needsRender = true;
   }
 

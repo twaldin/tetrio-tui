@@ -22,8 +22,11 @@ async function main(): Promise<void> {
 
   const driver = new TerminalDriver();
   const app = new App(driver);
+  const session = new TetrioSession();
+  const tetrioApp = new TetrioApp(app, session);
 
-  // Load theme: CLI --theme > env TETRIO_THEME > config store default ('tetrio').
+  // Load theme AFTER the app is constructed (its applyConfig applies the persisted config),
+  // so the precedence is CLI --theme > env TETRIO_THEME > config store.
   {
     const themeArg = args.indexOf('--theme');
     const cliTheme = themeArg >= 0 ? args[themeArg + 1] : undefined;
@@ -31,7 +34,7 @@ async function main(): Promise<void> {
     const chosen = cliTheme ?? envTheme;
     if (chosen) setTheme(chosen);
   }
-  // Load piece style: CLI --piece-style > env TETRIO_PIECE_STYLE.
+  // Load piece style: CLI --piece-style > env TETRIO_PIECE_STYLE > config store.
   {
     const styleArg = args.indexOf('--piece-style');
     const cliStyle = styleArg >= 0 ? args[styleArg + 1] : undefined;
@@ -39,8 +42,6 @@ async function main(): Promise<void> {
     const chosen = cliStyle ?? envStyle;
     if (chosen) setPieceStyle(chosen);
   }
-  const session = new TetrioSession();
-  const tetrioApp = new TetrioApp(app, session);
 
   let shuttingDown = false;
   const shutdown = (code = 0) => {

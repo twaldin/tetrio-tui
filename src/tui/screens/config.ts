@@ -14,7 +14,7 @@
  * an additional bind for that action (esc cancels). backspace/delete clears
  * the action's binds.
  */
-import type { KeyEvent, RenderBuffer, RGB, Screen } from '../app.js';
+import type { KeyEvent, MouseEvent, RenderBuffer, RGB, Screen } from '../app.js';
 import { THEME, center } from '../draw.js';
 import type { MenuNode } from './menu.js';
 import {
@@ -188,6 +188,25 @@ export class ConfigListScreen implements Screen {
     }
   }
 
+  /** Row/extent of each selectable row from the last render, for mouse hit-testing (null = header). */
+  private rowRects: ({ x: number; y: number; w: number; h: number } | null)[] = [];
+
+  onMouse(ev: MouseEvent): void {
+    if (this.capturing) return;
+    if (ev.action === 'scroll-up') { this.move(-1); return; }
+    if (ev.action === 'scroll-down') { this.move(1); return; }
+    if (ev.action === 'down' && ev.button !== 'left') return;
+    if (ev.action !== 'down' && ev.action !== 'move') return;
+    for (let i = 0; i < this.rowRects.length; i++) {
+      const r = this.rowRects[i];
+      if (!r) continue;
+      if (ev.x < r.x || ev.x >= r.x + r.w || ev.y < r.y || ev.y >= r.y + r.h) continue;
+      this.idx = i;
+      if (ev.action === 'down') this.activate(this.rows[i]);
+      return;
+    }
+  }
+
   private adjust(row: Row | undefined, dir: -1 | 1, big: boolean): void {
     if (!row) return;
     switch (row.kind) {
@@ -249,15 +268,18 @@ export class ConfigListScreen implements Screen {
     const compact = normal * 3 + headers * 2 > avail;
 
     let y = 5;
+    this.rowRects = [];
     for (let i = 0; i < this.rows.length; i++) {
       const row = this.rows[i];
       if (row.kind === 'header') {
+        this.rowRects.push(null);
         if (row.label) {
           buf.drawText(x + 2, compact ? y : y + 1, row.label, { fg: THEME.dim, bold: true });
           y += compact ? 1 : 2;
         } else if (!compact) y += 2;
         continue;
       }
+      this.rowRects.push({ x, y, w, h: compact ? 1 : 2 });
       const sel = i === this.idx;
       const bg: RGB = sel ? THEME.config : THEME.panel;
       const fg: RGB = sel ? [10, 10, 18] : THEME.text;

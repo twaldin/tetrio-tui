@@ -4,7 +4,7 @@
  * (src/tui/renderer.ts from the tui agent can replace the buffer/blit internals later.)
  */
 import { EventEmitter } from 'node:events';
-import type { AppDriver, KeyEvent, RenderBuffer, Style, RGB } from './app.js';
+import type { AppDriver, KeyEvent, MouseEvent, RenderBuffer, Style, RGB } from './app.js';
 
 type PackedCell = { ch: string; fg: number; bg: number; attr: number };
 
@@ -113,13 +113,14 @@ export class TerminalDriver implements AppDriver {
   buffer(): RenderBuffer { return this.back; }
   size() { return { width: this.back.width, height: this.back.height }; }
   onKey(cb: (ev: KeyEvent) => void): void { this.emitter.on('key', cb); }
+  onMouse(cb: (ev: MouseEvent) => void): void { this.emitter.on('mouse', cb); }
   onResize(cb: (w: number, h: number) => void): void { this.emitter.on('resize', cb); }
 
   start(): void {
     if (this.started) return;
     this.started = true;
     const stdin = process.stdin;
-    this.out.write('\x1b[?1049h\x1b[?25l\x1b[2J'); // alt screen, hide cursor, clear
+    this.out.write('\x1b[?1049h\x1b[?25l\x1b[2J\x1b[?1006h\x1b[?1003h'); // alt screen, hide cursor, clear, SGR mouse any-event tracking
     if (stdin.isTTY) stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding('utf8');
@@ -176,13 +177,19 @@ export class TerminalDriver implements AppDriver {
     stdin.removeAllListeners('data');
     if (stdin.isTTY) stdin.setRawMode(false);
     stdin.pause();
-    this.out.write('\x1b[0m\x1b[?25h\x1b[?1049l'); // reset, show cursor, leave alt screen
+    this.out.write('\x1b[?1003l\x1b[?1006l\x1b[0m\x1b[?25h\x1b[?1049l'); // mouse off, reset, show cursor, leave alt screen
   }
 
   // ---- input parsing ----
   private parseInput(data: string): void {
     let i = 0;
     while (i < data.length) {
+      const m = this.readMouse(data, i);
+      if (m) {
+        this.emitter.emit('mouse', m.event);
+        i = m.next;
+        continue;
+      }
       const ev = this.readKey(data, i);
       if (ev) {
         this.emitter.emit('key', ev.event);
@@ -191,6 +198,27 @@ export class TerminalDriver implements AppDriver {
         i++;
       }
     }
+  }
+
+  // SGR mouse: ESC [ < Cb ; Cx ; Cy M (press) / m (release). Coords are 1-based.
+  private readMouse(data: string, i: number): { event: MouseEvent; next: number } | null {
+    if (data[i] !== '\x1b') return null;
+    const m = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(data.slice(i));
+    if (!m) return null;
+    const cb = parseInt(m[1], 10);
+    const x = parseInt(m[2], 10) - 1;
+    const y = parseInt(m[3], 10) - 1;
+    let event: MouseEvent;
+    if (cb & 64) {
+      event = { kind: 'mouse', action: cb & 1 ? 'scroll-down' : 'scroll-up', x, y };
+    } else if (cb & 32) {
+      event = { kind: 'mouse', action: 'move', x, y };
+    } else {
+      const b = cb & 3;
+      const button = b === 0 ? 'left' : b === 1 ? 'middle' : b === 2 ? 'right' : undefined;
+      event = { kind: 'mouse', action: m[4] === 'M' ? 'down' : 'up', x, y, button };
+    }
+    return { event, next: i + m[0].length };
   }
 
   private readKey(data: string, i: number): { event: KeyEvent; next: number } | null {

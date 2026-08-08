@@ -1,5 +1,5 @@
 /** Generic navigable menu screen (data-driven). Used across the whole app for parity. */
-import type { RenderBuffer, Screen, KeyEvent, Style } from '../app.js';
+import type { RenderBuffer, Screen, KeyEvent, MouseEvent, Style } from '../app.js';
 import { THEME, drawMenuItem, center, drawBox } from '../draw.js';
 
 export interface MenuItem {
@@ -50,10 +50,33 @@ export class MenuScreen implements Screen {
   onKey(ev: KeyEvent): void {
     if (ev.type !== 'down') return;
     switch (ev.key) {
-      case 'up': this.idx = (this.idx - 1 + this.node.items.length) % this.node.items.length; this.skipDisabled(-1); break;
-      case 'down': this.idx = (this.idx + 1) % this.node.items.length; this.skipDisabled(1); break;
+      case 'up': this.move(-1); break;
+      case 'down': this.move(1); break;
       case 'return': this.activate(); break;
       case 'escape': case 'backspace': this.onBack?.(); break;
+    }
+  }
+
+  private move(dir: number): void {
+    this.idx = (this.idx + dir + this.node.items.length) % this.node.items.length;
+    this.skipDisabled(dir);
+  }
+
+  /** Row/extent of each item from the last render, for mouse hit-testing. */
+  private itemRects: { x: number; y: number; w: number; h: number }[] = [];
+
+  onMouse(ev: MouseEvent): void {
+    if (ev.action === 'scroll-up') { this.move(-1); return; }
+    if (ev.action === 'scroll-down') { this.move(1); return; }
+    if (ev.action === 'down' && ev.button !== 'left') return;
+    if (ev.action !== 'down' && ev.action !== 'move') return;
+    for (let i = 0; i < this.itemRects.length; i++) {
+      const r = this.itemRects[i];
+      if (ev.x < r.x || ev.x >= r.x + r.w || ev.y < r.y || ev.y >= r.y + r.h) continue;
+      if (this.node.items[i].disabled) return;
+      this.idx = i;
+      if (ev.action === 'down') this.activate();
+      return;
     }
   }
 
@@ -93,6 +116,7 @@ export class MenuScreen implements Screen {
     const w = Math.min(66, buf.width - 8);
     const x = Math.floor((buf.width - w) / 2);
     let y = this.node.title === 'HOME' ? 6 : 5;
+    this.itemRects = [];
     for (let i = 0; i < this.node.items.length; i++) {
       const item = this.node.items[i];
       const sel = i === this.idx;
@@ -100,6 +124,7 @@ export class MenuScreen implements Screen {
       drawMenuItem(buf, x, y, w, item.label, item.sub ?? '', sel, color);
       if (item.badge) buf.drawText(x + w - item.badge.length - 2, y + 1, item.badge, { fg: sel ? [10, 10, 18] : THEME.good, bold: true });
       if (item.disabled && item.sub) buf.drawText(x + w - item.sub.length - 2, y + 1, item.sub, { fg: THEME.dim });
+      this.itemRects.push({ x, y, w, h: 3 });
       y += 4;
     }
     center(buf, buf.height - 3, '↑↓ select · enter confirm · esc back', { fg: THEME.dim });

@@ -1,85 +1,138 @@
 /**
- * Big ASCII-art text renderer for tetrio-tui.
+ * Big text renderer for tetrio-tui — blocky (solid █) Figlet-style fonts.
  *
- * Uses a REAL Figlet font (the classic "small" font by Glenn Chappell, parsed from
- * small.flf) — actual ASCII-art glyphs made of / \ _ | . characters, not hand-drawn
- * block bitmaps. This is far more legible than the previous custom bitmap font.
+ * Two sizes, both solid/blocky (not hollow):
+ *   - BIG: the Figlet "banner3" font (7 rows), solid blocks — for TETRIS, T-SPIN,
+ *     CLEAR, and the combo counter at high combos.
+ *   - SMALL: a compact 4-row blocky font — for SINGLE/DOUBLE/TRIPLE and small combos.
  *
- * Zero allocations in the render path — glyph data is static strings.
+ * Supports an optional diagonal (staircase) slant like the real game, and a size that
+ * can grow (combo). Zero allocations in the render path.
  */
 import type { RenderBuffer, Style, RGB } from '../tui/app.js';
 
-// Figlet "small" font glyphs (flf2a$, height 5). Each glyph is 5 rows of ASCII art.
-const GLYPHS: Record<string, string[]> = {
-  " ": ["", "", "", "", ""],
-  "!": ["  _", " | |", " |_|", " (_)", ""],
-  "+": ["    _", "  _| |_", " |_   _|", "   |_|", ""],
-  "-": ["", "  ___", " |___|", "", ""],
-  ".": ["", "", "  _", " (_)", ""],
-  "0": ["   __", "  /  \\", " | () |", "  \\__/", ""],
-  "1": ["  _", " / |", " | |", " |_|", ""],
-  "2": ["  ___", " |_  )", "  / /", " /___|", ""],
-  "3": ["  ____", " |__ /", "  |_ \\", " |___/", ""],
-  "4": ["  _ _", " | | |", " |_  _|", "   |_|", ""],
-  "5": ["  ___", " | __|", " |__ \\", " |___/", ""],
-  "6": ["   __", "  / /", " / _ \\", " \\___/", ""],
-  "7": ["  ____", " |__  |", "   / /", "  /_/", ""],
-  "8": ["  ___", " ( _ )", " / _ \\", " \\___/", ""],
-  "9": ["  ___", " / _ \\", " \\_, /", "  /_/", ""],
-  ":": ["  _", " (_)", "  _", " (_)", ""],
-  "A": ["    _", "   /_\\", "  / _ \\", " /_/ \\_\\", ""],
-  "B": ["  ___", " | _ )", " | _ \\", " |___/", ""],
-  "C": ["   ___", "  / __|", " | (__", "  \\___|", ""],
-  "D": ["  ___", " |   \\", " | |) |", " |___/", ""],
-  "E": ["  ___", " | __|", " | _|", " |___|", ""],
-  "F": ["  ___", " | __|", " | _|", " |_|", ""],
-  "G": ["   ___", "  / __|", " | (_ |", "  \\___|", ""],
-  "H": ["  _  _", " | || |", " | __ |", " |_||_|", ""],
-  "I": ["  ___", " |_ _|", "  | |", " |___|", ""],
-  "J": ["     _", "  _ | |", " | || |", "  \\__/", ""],
-  "K": ["  _  __", " | |/ /", " | ' <", " |_|\\_\\", ""],
-  "L": ["  _", " | |", " | |__", " |____|", ""],
-  "M": ["  __  __", " |  \\/  |", " | |\\/| |", " |_|  |_|", ""],
-  "N": ["  _  _", " | \\| |", " | .` |", " |_|\\_|", ""],
-  "O": ["   ___", "  / _ \\", " | (_) |", "  \\___/", ""],
-  "P": ["  ___", " | _ \\", " |  _/", " |_|", ""],
-  "Q": ["   ___", "  / _ \\", " | (_) |", "  \\__\\_\\", ""],
-  "R": ["  ___", " | _ \\", " |   /", " |_|_\\", ""],
-  "S": ["  ___", " / __|", " \\__ \\", " |___/", ""],
-  "T": ["  _____", " |_   _|", "   | |", "   |_|", ""],
-  "U": ["  _   _", " | | | |", " | |_| |", "  \\___/", ""],
-  "V": [" __   __", " \\ \\ / /", "  \\ V /", "   \\_/", ""],
-  "W": [" __      __", " \\ \\    / /", "  \\ \\/\\/ /", "   \\_/\\_/", ""],
-  "X": [" __  __", " \\ \\/ /", "  >  <", " /_/\\_\\", ""],
-  "Y": [" __   __", " \\ \\ / /", "  \\ V /", "   |_|", ""],
-  "Z": ["  ____", " |_  /", "  / /", " /___|", ""],
+const BIG: Record<string, string[]> = {
+  " ": ["", "", "", "", "", "", ""],
+  "!": ["\u2588\u2588\u2588\u2588", "\u2588\u2588\u2588\u2588", "\u2588\u2588\u2588\u2588", " \u2588\u2588", "", "\u2588\u2588\u2588\u2588", "\u2588\u2588\u2588\u2588"],
+  "+": ["", "  \u2588\u2588", "  \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588", "  \u2588\u2588", "  \u2588\u2588", ""],
+  "-": ["", "", "", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "", "", ""],
+  ".": ["", "", "", "", "", "\u2588\u2588\u2588", "\u2588\u2588\u2588"],
+  "0": ["  \u2588\u2588\u2588\u2588\u2588", " \u2588\u2588   \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588   \u2588\u2588", "  \u2588\u2588\u2588\u2588\u2588"],
+  "1": ["   \u2588\u2588", " \u2588\u2588\u2588\u2588", "   \u2588\u2588", "   \u2588\u2588", "   \u2588\u2588", "   \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588"],
+  "2": [" \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "       \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "3": [" \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "       \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "       \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "4": ["\u2588\u2588", "\u2588\u2588    \u2588\u2588", "\u2588\u2588    \u2588\u2588", "\u2588\u2588    \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "      \u2588\u2588", "      \u2588\u2588"],
+  "5": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "      \u2588\u2588", "\u2588\u2588    \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588"],
+  "6": [" \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "7": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588    \u2588\u2588", "    \u2588\u2588", "   \u2588\u2588", "  \u2588\u2588", "  \u2588\u2588", "  \u2588\u2588"],
+  "8": [" \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "9": [" \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "       \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  ":": [" \u2588\u2588", "\u2588\u2588\u2588\u2588", " \u2588\u2588", "", " \u2588\u2588", "\u2588\u2588\u2588\u2588", " \u2588\u2588"],
+  "A": ["   \u2588\u2588\u2588", "  \u2588\u2588 \u2588\u2588", " \u2588\u2588   \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588"],
+  "B": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "C": [" \u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588    \u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588    \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588"],
+  "D": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "E": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "F": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588"],
+  "G": [" \u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588    \u2588\u2588", "\u2588\u2588", "\u2588\u2588   \u2588\u2588\u2588\u2588", "\u2588\u2588    \u2588\u2588", "\u2588\u2588    \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588"],
+  "H": ["\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588"],
+  "I": ["\u2588\u2588\u2588\u2588", " \u2588\u2588", " \u2588\u2588", " \u2588\u2588", " \u2588\u2588", " \u2588\u2588", "\u2588\u2588\u2588\u2588"],
+  "J": ["      \u2588\u2588", "      \u2588\u2588", "      \u2588\u2588", "      \u2588\u2588", "\u2588\u2588    \u2588\u2588", "\u2588\u2588    \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588"],
+  "K": ["\u2588\u2588    \u2588\u2588", "\u2588\u2588   \u2588\u2588", "\u2588\u2588  \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588  \u2588\u2588", "\u2588\u2588   \u2588\u2588", "\u2588\u2588    \u2588\u2588"],
+  "L": ["\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "M": ["\u2588\u2588     \u2588\u2588", "\u2588\u2588\u2588   \u2588\u2588\u2588", "\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588", "\u2588\u2588 \u2588\u2588\u2588 \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588"],
+  "N": ["\u2588\u2588    \u2588\u2588", "\u2588\u2588\u2588   \u2588\u2588", "\u2588\u2588\u2588\u2588  \u2588\u2588", "\u2588\u2588 \u2588\u2588 \u2588\u2588", "\u2588\u2588  \u2588\u2588\u2588\u2588", "\u2588\u2588   \u2588\u2588\u2588", "\u2588\u2588    \u2588\u2588"],
+  "O": [" \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "P": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588", "\u2588\u2588", "\u2588\u2588"],
+  "Q": [" \u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588  \u2588\u2588 \u2588\u2588", "\u2588\u2588    \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588 \u2588\u2588"],
+  "R": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588   \u2588\u2588", "\u2588\u2588    \u2588\u2588", "\u2588\u2588     \u2588\u2588"],
+  "S": [" \u2588\u2588\u2588\u2588\u2588\u2588", "\u2588\u2588    \u2588\u2588", "\u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588", "      \u2588\u2588", "\u2588\u2588    \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588"],
+  "T": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "   \u2588\u2588", "   \u2588\u2588", "   \u2588\u2588", "   \u2588\u2588", "   \u2588\u2588", "   \u2588\u2588"],
+  "U": ["\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
+  "V": ["\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", "\u2588\u2588     \u2588\u2588", " \u2588\u2588   \u2588\u2588", "  \u2588\u2588 \u2588\u2588", "   \u2588\u2588\u2588"],
+  "W": ["\u2588\u2588      \u2588\u2588", "\u2588\u2588  \u2588\u2588  \u2588\u2588", "\u2588\u2588  \u2588\u2588  \u2588\u2588", "\u2588\u2588  \u2588\u2588  \u2588\u2588", "\u2588\u2588  \u2588\u2588  \u2588\u2588", "\u2588\u2588  \u2588\u2588  \u2588\u2588", " \u2588\u2588\u2588  \u2588\u2588\u2588"],
+  "X": ["\u2588\u2588     \u2588\u2588", " \u2588\u2588   \u2588\u2588", "  \u2588\u2588 \u2588\u2588", "   \u2588\u2588\u2588", "  \u2588\u2588 \u2588\u2588", " \u2588\u2588   \u2588\u2588", "\u2588\u2588     \u2588\u2588"],
+  "Y": ["\u2588\u2588    \u2588\u2588", " \u2588\u2588  \u2588\u2588", "  \u2588\u2588\u2588\u2588", "   \u2588\u2588", "   \u2588\u2588", "   \u2588\u2588", "   \u2588\u2588"],
+  "Z": ["\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588", "     \u2588\u2588", "    \u2588\u2588", "   \u2588\u2588", "  \u2588\u2588", " \u2588\u2588", "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588"],
 };
 
-const GLYPH_HEIGHT = 5;
-const GLYPH_GAP = 1;
+const SMALL: Record<string, string[]> = {
+  " ": [" ", " ", " ", " "],
+  "!": [" \u2588 ", " \u2588 ", "   ", " \u2588 "],
+  "+": ["   ", " \u2588 ", "\u2588\u2588\u2588", " \u2588 "],
+  "-": ["   ", "   ", "\u2588\u2588\u2588", "   "],
+  ".": ["  ", "  ", "  ", " \u2588"],
+  "0": [" \u2588 ", "\u2588 \u2588", "\u2588 \u2588", " \u2588 "],
+  "1": [" \u2588 ", "\u2588\u2588 ", " \u2588 ", "\u2588\u2588\u2588"],
+  "2": ["\u2588\u2588 ", "  \u2588", " \u2588 ", "\u2588\u2588\u2588"],
+  "3": ["\u2588\u2588 ", "  \u2588", " \u2588 ", "\u2588\u2588 "],
+  "4": ["\u2588 \u2588", "\u2588 \u2588", "\u2588\u2588\u2588", "  \u2588"],
+  "5": ["\u2588\u2588\u2588", "\u2588  ", "\u2588\u2588\u2588", "  \u2588"],
+  "6": [" \u2588\u2588", "\u2588  ", "\u2588\u2588 ", " \u2588 "],
+  "7": ["\u2588\u2588\u2588", "  \u2588", " \u2588 ", " \u2588 "],
+  "8": [" \u2588 ", "\u2588 \u2588", " \u2588 ", "\u2588 \u2588"],
+  "9": [" \u2588 ", "\u2588 \u2588", " \u2588\u2588", "  \u2588"],
+  ":": [" ", "\u2588", " ", "\u2588"],
+  "A": [" \u2588 ", "\u2588 \u2588", "\u2588\u2588\u2588", "\u2588 \u2588"],
+  "B": ["\u2588\u2588 ", "\u2588 \u2588", "\u2588\u2588 ", "\u2588\u2588\u2588"],
+  "C": [" \u2588\u2588", "\u2588  ", "\u2588  ", " \u2588\u2588"],
+  "D": ["\u2588\u2588 ", "\u2588 \u2588", "\u2588 \u2588", "\u2588\u2588 "],
+  "E": ["\u2588\u2588\u2588", "\u2588  ", "\u2588\u2588 ", "\u2588\u2588\u2588"],
+  "F": ["\u2588\u2588\u2588", "\u2588  ", "\u2588\u2588 ", "\u2588  "],
+  "G": [" \u2588\u2588", "\u2588  ", "\u2588 \u2588", " \u2588\u2588"],
+  "H": ["\u2588 \u2588", "\u2588 \u2588", "\u2588\u2588\u2588", "\u2588 \u2588"],
+  "I": ["\u2588\u2588\u2588", " \u2588 ", " \u2588 ", "\u2588\u2588\u2588"],
+  "J": ["  \u2588", "  \u2588", "  \u2588", "\u2588\u2588 "],
+  "K": ["\u2588 \u2588", "\u2588\u2588 ", "\u2588\u2588 ", "\u2588 \u2588"],
+  "L": ["\u2588  ", "\u2588  ", "\u2588  ", "\u2588\u2588\u2588"],
+  "M": ["\u2588   \u2588", "\u2588\u2588 \u2588\u2588", "\u2588 \u2588 \u2588", "\u2588   \u2588"],
+  "N": ["\u2588  \u2588", "\u2588\u2588 \u2588", "\u2588 \u2588\u2588", "\u2588  \u2588"],
+  "O": [" \u2588 ", "\u2588 \u2588", "\u2588 \u2588", " \u2588 "],
+  "P": ["\u2588\u2588 ", "\u2588 \u2588", "\u2588\u2588 ", "\u2588  "],
+  "Q": [" \u2588 ", "\u2588 \u2588", "\u2588 \u2588", " \u2588\u2588"],
+  "R": ["\u2588\u2588 ", "\u2588 \u2588", "\u2588\u2588 ", "\u2588 \u2588"],
+  "S": [" \u2588\u2588", "\u2588  ", " \u2588 ", "\u2588\u2588 "],
+  "T": ["\u2588\u2588\u2588", " \u2588 ", " \u2588 ", " \u2588 "],
+  "U": ["\u2588 \u2588", "\u2588 \u2588", "\u2588 \u2588", "\u2588\u2588\u2588"],
+  "V": ["\u2588 \u2588", "\u2588 \u2588", "\u2588 \u2588", " \u2588 "],
+  "W": ["\u2588   \u2588", "\u2588   \u2588", "\u2588 \u2588 \u2588", " \u2588 \u2588 "],
+  "X": ["\u2588 \u2588", "\u2588 \u2588", " \u2588 ", "\u2588 \u2588"],
+  "Y": ["\u2588 \u2588", "\u2588 \u2588", " \u2588 ", " \u2588 "],
+  "Z": ["\u2588\u2588\u2588", "  \u2588", " \u2588 ", "\u2588\u2588\u2588"],
+  "\u00d7": ["\u2588 \u2588", " \u2588 ", "\u2588 \u2588", "   "],
+  "\u2605": [" \u2588 ", "\u2588\u2588\u2588", " \u2588 ", "\u2588 \u2588"],
+};
 
-/** Get the rendered width of a glyph in columns (max row length). */
+const HEIGHT: Record<'big' | 'small', number> = { big: 7, small: 4 };
+const GAP = 1;
+
+function glyphFor(ch: string, size: 'big' | 'small'): string[] | undefined {
+  return (size === 'big' ? BIG : SMALL)[ch.toUpperCase()];
+}
+
 function glyphWidth(g: string[]): number {
   let w = 0;
   for (const r of g) w = Math.max(w, r.length);
   return w;
 }
 
-/** Measure the total width of a big-text string (including gaps between chars). */
-export function measureBigText(text: string, _size: 'big' | 'small' = 'big'): { width: number; height: number } {
+/** Measure a big-text string. `diagonal` adds width for the staircase slant. */
+export function measureBigText(text: string, size: 'big' | 'small' = 'big', diagonal = false): { width: number; height: number } {
+  const h = HEIGHT[size];
   let width = 0;
   for (let i = 0; i < text.length; i++) {
-    const g = GLYPHS[text[i].toUpperCase()];
+    const g = glyphFor(text[i], size);
     if (!g) { width += 2; continue; }
-    if (i > 0) width += GLYPH_GAP;
+    if (i > 0) width += GAP;
     width += glyphWidth(g);
   }
-  return { width, height: GLYPH_HEIGHT };
+  if (diagonal) width += h - 1; // staircase extends right
+  return { width, height: h };
 }
 
 /**
- * Render big text at (x, y). Returns the rendered width.
- * Draws each glyph's ASCII-art rows; spaces are transparent.
+ * Render big text at (x, y). If `diagonal`, each row is shifted right by one column
+ * (a staircase slant, like the real game's tilted action text). Returns the width.
  */
 export function renderBigText(
   buf: RenderBuffer,
@@ -87,19 +140,19 @@ export function renderBigText(
   y: number,
   text: string,
   style: Style,
-  _size: 'big' | 'small' = 'big',
+  size: 'big' | 'small' = 'big',
+  diagonal = false,
 ): number {
   let cx = x;
   for (let i = 0; i < text.length; i++) {
-    const ch = text[i].toUpperCase();
-    const g = GLYPHS[ch];
+    const g = glyphFor(text[i], size);
     if (!g) { cx += 2; continue; }
-    if (i > 0) cx += GLYPH_GAP;
+    if (i > 0) cx += GAP;
     for (let row = 0; row < g.length; row++) {
       const line = g[row];
+      const xoff = diagonal ? row : 0; // staircase slant
       for (let col = 0; col < line.length; col++) {
-        const c = line[col];
-        if (c !== ' ') buf.set(cx + col, y + row, c, style);
+        if (line[col] !== ' ') buf.set(cx + col + xoff, y + row, line[col], style);
       }
     }
     cx += glyphWidth(g);
@@ -107,7 +160,7 @@ export function renderBigText(
   return cx - x;
 }
 
-/** Render big text centered horizontally at cx. Returns the start x. */
+/** Render big text centered horizontally at cx. */
 export function renderBigTextCentered(
   buf: RenderBuffer,
   cx: number,
@@ -115,53 +168,41 @@ export function renderBigTextCentered(
   text: string,
   style: Style,
   size: 'big' | 'small' = 'big',
+  diagonal = false,
 ): number {
-  const { width } = measureBigText(text, size);
+  const { width } = measureBigText(text, size, diagonal);
   const startX = cx - Math.floor(width / 2);
-  renderBigText(buf, startX, y, text, style, size);
+  renderBigText(buf, startX, y, text, style, size, diagonal);
   return startX;
 }
 
-/** Combo number size helper — kept for API compatibility (single font now). */
-export function comboSize(_combo: number): 'big' | 'small' {
-  return 'small';
+/** Combo number size — combo text grows with the count (small then big). */
+export function comboSize(combo: number): 'big' | 'small' {
+  return combo >= 4 ? 'big' : 'small';
 }
 
-/** Render a combo counter as a simple "COMBO x3" text line (no big ASCII number). */
+/** Render a clear-type label (SINGLE, DOUBLE, ...) in the blocky font. */
+export function renderClearLabel(
+  buf: RenderBuffer, x: number, y: number, clearType: string, color: RGB,
+  size: 'big' | 'small' = 'small', diagonal = false,
+): number {
+  return renderBigText(buf, x, y, clearType, { fg: color, bold: true }, size, diagonal);
+}
+
+/** Render a combo counter as a simple "COMBO x3" text line. */
 export function renderComboCounter(
-  buf: RenderBuffer,
-  x: number,
-  y: number,
-  combo: number,
-  color: RGB,
-  accentColor: RGB,
+  buf: RenderBuffer, x: number, y: number, combo: number, color: RGB, _accentColor: RGB,
 ): { width: number; height: number } {
   const label = `COMBO x${combo}`;
   buf.drawText(x, y, label, { fg: color, bold: true });
   return { width: label.length, height: 1 };
 }
 
-/** Render a B2B (back-to-back) counter as a simple text line. */
+/** Render a B2B counter as a simple "B2B x2" text line. */
 export function renderB2BCounter(
-  buf: RenderBuffer,
-  x: number,
-  y: number,
-  b2b: number,
-  color: RGB,
+  buf: RenderBuffer, x: number, y: number, b2b: number, color: RGB,
 ): { width: number; height: number } {
   const label = `B2B x${b2b}`;
   buf.drawText(x, y, label, { fg: color, bold: true });
   return { width: label.length, height: 1 };
-}
-
-/** Render a clear-type label (SINGLE, DOUBLE, ...) in the Figlet font. */
-export function renderClearLabel(
-  buf: RenderBuffer,
-  x: number,
-  y: number,
-  clearType: string,
-  color: RGB,
-  size: 'big' | 'small' = 'small',
-): number {
-  return renderBigText(buf, x, y, clearType, { fg: color, bold: true }, size);
 }

@@ -1,5 +1,5 @@
 /** Room browser (public room listing) + room lobby screens. */
-import type { RenderBuffer, Screen, KeyEvent } from '../app.js';
+import type { RenderBuffer, Screen, KeyEvent, MouseEvent } from '../app.js';
 import { THEME, center, drawBox } from '../draw.js';
 import type { TetrioClient } from '../../client.js';
 
@@ -73,8 +73,27 @@ export class RoomListingScreen implements Screen {
     }
   }
 
+  /** Row/extent of each visible room from the last render, for mouse hit-testing. */
+  private roomRects: { x: number; y: number; w: number; h: number }[] = [];
+
+  onMouse(ev: MouseEvent): void {
+    if (this.joinIdMode) return;
+    if (ev.action === 'scroll-up') { this.idx = Math.max(0, this.idx - 1); return; }
+    if (ev.action === 'scroll-down') { this.idx = Math.min(Math.max(0, this.rooms.length - 1), this.idx + 1); return; }
+    if (ev.action === 'down' && ev.button !== 'left') return;
+    if (ev.action !== 'down' && ev.action !== 'move') return;
+    for (let i = 0; i < this.roomRects.length; i++) {
+      const r = this.roomRects[i];
+      if (ev.x < r.x || ev.x >= r.x + r.w || ev.y < r.y || ev.y >= r.y + r.h) continue;
+      this.idx = i;
+      if (ev.action === 'down' && this.rooms[i]) this.onJoin(this.rooms[i].id);
+      return;
+    }
+  }
+
   render(buf: RenderBuffer): void {
     buf.fillRect(0, 0, buf.width, buf.height, ' ', { bg: THEME.bg });
+    this.roomRects = [];
     buf.drawText(2, 1, 'MULTIPLAYER / ROOM LISTING', { fg: THEME.accent, bold: true });
     buf.drawText(buf.width - 12, 1, 'r: refresh', { fg: THEME.dim });
     if (this.loading) { center(buf, 8, 'loading…', { fg: THEME.dim }); return; }
@@ -91,6 +110,7 @@ export class RoomListingScreen implements Screen {
       buf.drawText(x + 2, y, r.name, { fg, bold: true });
       buf.drawText(x + 2, y + 1, `${r.info} ${r.extra}`, { fg: sel ? fg : THEME.dim });
       buf.drawText(x + w - 8, y, r.count, { fg: sel ? fg : THEME.good, bold: true });
+      this.roomRects.push({ x, y, w, h: 3 });
       y += 3;
     }
     if (this.joinIdMode) {

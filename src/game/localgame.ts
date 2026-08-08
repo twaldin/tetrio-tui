@@ -40,16 +40,25 @@ export class LocalGameController extends EventEmitter {
   private fullInterval = 600;   // send a full snapshot every N frames
   private heartbeatInterval = 50; // send a (possibly empty) batch every N frames
   private keyState: InputState = { ...NEUTRAL_INPUT };
+  /** Optional sprint objective (e.g. clear N lines to win). */
+  objective: { type: 'lines'; count: number } | null = null;
+  /** 'playing' | 'win' (objective met) | 'topout'. */
+  result: 'playing' | 'win' | 'topout' = 'playing';
+  /** Final time in frames when the game ended (60 fps). */
+  finalTime = 0;
 
   constructor() { super(); }
 
   /** Start a new local game. gameid assigned by server (game.enter/game.start). */
-  start(gameid: number, options: Partial<GameOptions>, seed?: number): void {
+  start(gameid: number, options: Partial<GameOptions>, seed?: number, objective?: { type: 'lines'; count: number }): void {
     this.gameid = gameid;
     this.engine = createGame(options, seed);
     this.frame = 0;
     this.frameBuffer = [];
     this.playing = true;
+    this.objective = objective ?? null;
+    this.result = 'playing';
+    this.finalTime = 0;
     startGame(this.engine);
     // initial frames: start + full snapshot
     this.frameBuffer.push({ type: 'start', frame: 0, data: {} });
@@ -140,8 +149,19 @@ export class LocalGameController extends EventEmitter {
     }
     if (events.gameover) {
       this.playing = false;
+      this.result = 'topout';
+      this.finalTime = this.engine.stats.currentTime;
       this.flush(true);
       this.emit('gameover', false);
+      return events;
+    }
+    // sprint objective: clear N lines to win
+    if (this.objective && this.objective.type === 'lines' && this.engine.stats.lines >= this.objective.count) {
+      this.playing = false;
+      this.result = 'win';
+      this.finalTime = this.engine.stats.currentTime;
+      this.flush(true);
+      this.emit('gameover', true);
       return events;
     }
 

@@ -12,6 +12,7 @@ import { bestPlacement } from '../../game/solver.js';
 import { PIECE_ROTATIONS } from '../../game/pieces.js';
 import type { BoardGrid, FallingPiece } from '../../types.js';
 import { EffectManager } from '../effects.js';
+import { renderBigTextCentered } from '../bigtext.js';
 import { playClear, playTSpin, playCombo, playHardDrop, playAllClear, playB2B } from '../sound.js';
 
 export interface GameScreenOpts {
@@ -333,7 +334,23 @@ export class GameScreen implements Screen {
       }
     }
 
-    center(buf, buf.height - 2, 'esc forfeit', _s.faintS);
+    // Game-over overlay: sprint completion (win) or topout
+    const result = this.ctrl.result;
+    if (result !== 'playing') {
+      const cx = boardX + bw; // board center (bw cells * 2 wide / 2)
+      const cy = boardY + Math.floor(bh / 2) - 4;
+      if (result === 'win') {
+        renderBigTextCentered(buf, cx, cy, 'CLEAR', { fg: t.good, bold: true }, 'big');
+        const tsec = this.ctrl.finalTime / 60;
+        center(buf, cy + 6, `${tsec.toFixed(2)}s`, { fg: t.text, bold: true });
+        center(buf, cy + 8, 'esc back', _s.dimS);
+      } else {
+        renderBigTextCentered(buf, cx, cy, 'TOP OUT', { fg: t.bad, bold: true }, 'big');
+        center(buf, cy + 6, 'esc back', _s.dimS);
+      }
+    } else {
+      center(buf, buf.height - 2, 'esc forfeit', _s.faintS);
+    }
   }
 }
 

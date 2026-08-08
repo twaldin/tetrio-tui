@@ -541,7 +541,7 @@ export class EffectManager {
             }
           } else {
             // Not yet swept — dimming residue
-            const fadeFactor = Math.max(0.05, 0.22 - sweepFrame * 0.05);
+            const fadeFactor = Math.max(0.03, 0.12 - sweepFrame * 0.03);
             const fadeColor = dimRGB(color, fadeFactor);
             buf.set(px, py, '░', { fg: fadeColor });
             buf.set(px + 1, py, '░', { fg: fadeColor });

@@ -178,7 +178,7 @@ export class GameScreen implements Screen {
     f.r = r;
     f.x = x;
     this.ctrl.setInput({ hardDrop: true });
-    this.autoPlayCooldown = 5; // a few settle frames per piece => readable sprint pace
+    this.autoPlayCooldown = 7; // calm, readable pace for the demo (~4 PPS)
   }
 
   render(buf: RenderBuffer): void {
@@ -266,17 +266,18 @@ export class GameScreen implements Screen {
       // Shake for clears
       const clearMag = isTetris ? 'heavy' : pc.lines >= 3 ? 'medium' : 'light';
       this.fx.spawnShake(clearMag, 0, 1);
-      // Big text: clear type over the board (near the cleared rows)
+      // Big text: clear type to the LEFT of the board (out of the way of the pieces).
       const clearLabel = clearText(pc as any);
       const clearColor = isTetris ? t.warn : pc.tspin ? t.accent : t.text;
-      const clearY = boardY + bh - pc.lines - 2; // just above cleared rows
-      const textSize = isTetris || pc.tspin ? 'big' : 'small';
-      this.fx.spawnBigText(clearLabel, clearColor as RGB, -1, clearY, textSize as 'big' | 'small', true, 1);
-      // Attack amount popup (small, below the clear label)
-      if (pc.attack > 0) {
+      const actionX = -1; // -1 = centered on the board
+      const actionY = boardY + 2; // over the (empty) top of the board during a clear
+      const textSize = 'small'; // small (3 rows) is legible without dominating the board
+      this.fx.spawnBigText(clearLabel, clearColor as RGB, actionX, actionY, textSize as 'big' | 'small', true, 1);
+      // Attack amount popup (small, only for meaningful attacks, below the clear label)
+      if (pc.attack >= 2) {
         const atkText = `+${pc.attack}`;
         const atkColor: RGB = pc.attack >= 4 ? [255, 100, 100] : [255, 200, 100];
-        this.fx.spawnPopup(atkText, atkColor, -1, clearY + (textSize === 'big' ? 4 : 3), true, 1);
+        this.fx.spawnPopup(atkText, atkColor, actionX, actionY + 4, true, 1);
       }
     }
     if (this._pendingAllClear) {

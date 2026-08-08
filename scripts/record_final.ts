@@ -32,14 +32,13 @@ async function main() {
   };
 
   if (part === 'themes') {
+    // Show each theme on the HOME screen (menu) — the bg + accent + panel colors read
+    // much more clearly than the dark game board. Cycle the highlight so the accent shows.
     for (const theme of THEMES) {
       const term = await mkTerm({ TETRIO_THEME: theme, TUI_AUTOPLAY: '1' });
       await term.waitForText('MULTIPLAYER', { timeout: 15000 });
-      await term.press('down'); await term.press('enter');
-      await term.waitForText('40 LINES', { timeout: 3000 }).catch(() => {});
-      await term.press('enter');
-      await term.waitIdle({ timeout: 2500 }).catch(() => {});
-      await grab(term, 5); // ~5 frames per theme for a longer showcase
+      await term.waitIdle({ timeout: 1200 }).catch(() => {});
+      await grab(term, 3); // a few frames per theme (held longer in the assembly)
       term.killProcess();
     }
   } else {

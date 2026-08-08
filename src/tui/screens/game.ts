@@ -308,6 +308,10 @@ export class GameScreen implements Screen {
       this.fx.spawnB2BZone(s.btb - 1, [t.accent[0], t.accent[1], t.accent[2]] as RGB, comboZoneX + 7, comboZoneY);
     }
 
+    // Once the game ends, drop transient text effects (clear popups, combo/b2b) so the
+    // completion overlay reads cleanly — run before rendering them, every frame.
+    if (this.ctrl.result !== 'playing') this.fx.clearTransient();
+
     // Render all EffectManager overlays
     this.fx.render(buf, boardX, boardY, bw, bh);
 
@@ -349,10 +353,6 @@ export class GameScreen implements Screen {
     // Game-over overlay: sprint completion (win) or topout.
     // Draw a dark scrim behind the text so it reads over the frozen board stack.
     const result = this.ctrl.result;
-    if (result !== 'playing' && !this._clearedOnEnd) {
-      this._clearedOnEnd = true;
-      this.fx.clearTransient(); // drop the frozen last-clear label so the overlay reads cleanly
-    }
     if (result !== 'playing') {
       const cy = boardY + Math.floor(bh / 2) - 4;
       // Clean full-width modal: cover the whole game area (board + panels) so no panel is half-clipped.
@@ -361,13 +361,13 @@ export class GameScreen implements Screen {
       buf.fillRect(scrimX, scrimY, scrimW, scrimH, ' ', { bg: t.bg });
       if (buf.drawBox) buf.drawBox(scrimX, scrimY, scrimW, scrimH, { fg: t.borderSubtle });
       if (result === 'win') {
-        renderBigTextCentered(buf, gcx, cy + 1, 'CLEAR', { fg: t.good, bold: true }, 'big');
+        renderBigTextCentered(buf, gcx, cy, 'CLEAR', { fg: t.good, bold: true }, 'big');
         const tsec = this.ctrl.finalTime / 60;
-        center(buf, cy + 7, `${tsec.toFixed(2)}s`, { fg: t.text, bold: true });
-        center(buf, cy + 9, 'esc back', _s.dimS);
+        center(buf, cy + 8, `${tsec.toFixed(2)}s`, { fg: t.text, bold: true });
+        center(buf, cy + 10, 'esc back', _s.dimS);
       } else {
-        renderBigTextCentered(buf, gcx, cy + 1, 'TOP OUT', { fg: t.bad, bold: true }, 'big');
-        center(buf, cy + 7, 'esc back', _s.dimS);
+        renderBigTextCentered(buf, gcx, cy, 'TOP OUT', { fg: t.bad, bold: true }, 'big');
+        center(buf, cy + 8, 'esc back', _s.dimS);
       }
     } else {
       center(buf, buf.height - 2, 'esc forfeit', _s.faintS);

@@ -8,6 +8,7 @@ import { theme } from '../themes.js';
 import { LocalGameController } from '../../game/localgame.js';
 import { OpponentTracker } from '../../game/state.js';
 import { visibleBoard, BUFFER_ROWS } from '../../game/engine.js';
+import { bestPlacement } from '../../game/solver.js';
 import { PIECE_ROTATIONS } from '../../game/pieces.js';
 import type { BoardGrid, FallingPiece } from '../../types.js';
 import { EffectManager } from '../effects.js';
@@ -18,6 +19,7 @@ export interface GameScreenOpts {
   onExit: () => void;
   modeLabel: string;        // e.g. "TETRA LEAGUE", "40 LINES", "BLITZ"
   allowOpponents?: boolean;
+  autoPlay?: boolean;      // solver plays the game (demo mode)
 }
 
 
@@ -54,6 +56,7 @@ export class GameScreen implements Screen {
   private lastBtb = 0;
   private shakeFrames = 0;
   private keymap: Record<string, string>;
+  private autoPlay = false;
   private fx = new EffectManager();
 
   constructor(opts: GameScreenOpts) {
@@ -62,6 +65,7 @@ export class GameScreen implements Screen {
     this.onExit = opts.onExit;
     this.modeLabel = opts.modeLabel;
     this.keymap = defaultKeymap();
+    this.autoPlay = opts.autoPlay ?? false;
     this.ctrl.on('attack', (amt: number) => {
       this.effects.push({ kind: 'attack', frame: this.frame, amount: amt });
       this.shakeFrames = Math.min(8, 2 + amt);
@@ -105,6 +109,7 @@ export class GameScreen implements Screen {
 
   update(dtMs: number): void {
     this.frame++;
+    if (this.autoPlay) this.driveAutoPlay();
     // run the local engine at ~60fps (accumulate real time)
     const events = this.ctrl.tick();
     this.pumpInput();
@@ -123,6 +128,26 @@ export class GameScreen implements Screen {
     }
     this.effects.length = writeIdx;
     if (this.shakeFrames > 0) this.shakeFrames--;
+  }
+
+  /** Drive the game with the solver (demo auto-play): place each piece at the best spot, instantly. */
+  private autoPlayCooldown = 0;
+  private driveAutoPlay(): void {
+    const engine = this.ctrl.engine;
+    if (!engine || !engine.state.playing || engine.state.gameover) return;
+    const f = engine.falling;
+    if (!f) return;
+    this.ctrl.setInput({ hardDrop: false });
+    if (this.autoPlayCooldown > 0) { this.autoPlayCooldown--; return; }
+    const board = visibleBoard(engine.state.board);
+    const { x, r } = bestPlacement(board, f.type);
+    // Apply rotation + position directly (validated), then hard drop.
+    f.r = r;
+    // Check collision on the FULL board at the piece's actual y (buffer coords).
+    if (!collidesFor(engine.state.board, f.type, x, Math.floor(f.y), r)) f.x = x;
+    // hard drop: set true; the tick in this same update() reads it, then release next frame.
+    this.ctrl.setInput({ hardDrop: true });
+    this.autoPlayCooldown = 1; // one settle frame between placements (visible)
   }
 
   render(buf: RenderBuffer): void {
@@ -219,6 +244,19 @@ export class GameScreen implements Screen {
 
     center(buf, buf.height - 2, 'esc forfeit', _s.faintS);
   }
+}
+
+/** Collision check for a piece at (x, y, r) on a board (used by the auto-play solver). */
+function collidesFor(board: BoardGrid, type: string, x: number, y: number, r: number): boolean {
+  const shape = PIECE_ROTATIONS[type as keyof typeof PIECE_ROTATIONS]?.[r];
+  if (!shape) return true;
+  const h = board.length, w = board[0].length;
+  for (const [cx, cy] of shape) {
+    const bx = x + cx, by = y + cy;
+    if (bx < 0 || bx >= w || by >= h) return true;
+    if (by >= 0 && board[by][bx]) return true;
+  }
+  return false;
 }
 
 const ACTION_KEYS = new Set(['hardDrop', 'rotateCW', 'rotateCCW', 'rotate180', 'hold', 'reset', 'undo', 'redo']);

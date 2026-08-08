@@ -142,7 +142,7 @@ export class TetrioApp {
     ctrl.start(1, options, Math.floor(Math.random() * 0x7fffffff));
     const label = { '40l': '40 LINES', blitz: 'BLITZ', zen: 'ZEN', practice: 'PRACTICE' }[mode] ?? mode.toUpperCase();
     const screen = new GameScreen({
-      controller: ctrl, opponents: this.opponents, onExit: () => { ctrl.forfeit(); this.app.pop(); }, modeLabel: label,
+      controller: ctrl, opponents: this.opponents, onExit: () => { ctrl.forfeit(); this.app.pop(); }, modeLabel: label, autoPlay: process.env.TUI_AUTOPLAY === '1' || process.argv.includes('--autoplay'),
     });
     this.push(screen);
   }

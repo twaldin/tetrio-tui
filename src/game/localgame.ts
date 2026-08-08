@@ -107,6 +107,11 @@ export class LocalGameController extends EventEmitter {
     };
   }
 
+  /** Directly set the input state (programmatic play / solver). Bypasses the tap model. */
+  setInput(input: Partial<InputState>): void {
+    Object.assign(this.keyState, input);
+  }
+
   /** A key went down/up. Drives the engine + records a keydown/keyup frame. */
   setKey(key: string, down: boolean): void {
     if (!this.playing || !this.engine) return;

@@ -224,7 +224,7 @@ export class GameScreen implements Screen {
     const secs = Math.floor(st.currentTime / 60);
 
     // HOLD panel
-    drawPanel(buf, startX, boardY, panelW, 7, 'HOLD');
+    drawPanel(buf, startX, boardY, panelW, 6, 'HOLD');
     drawPiecePreview(buf, startX + 2, boardY + 2, s.hold.piece);
 
     // STATS — plain text at the bottom-left (TETR.IO style), freeing the middle-left for the
@@ -300,7 +300,7 @@ export class GameScreen implements Screen {
       const isTspin = pc.tspin === 'full' || pc.tspin === 'mini';
       const isBig = isTetris || isTspin;
       const typeNames: Record<string, string> = { single: 'SINGLE', double: 'DOUBLE', triple: 'TRIPLE', tetris: 'QUAD' };
-      const clearColor = isTetris ? t.warn : isTspin ? t.accent : t.text;
+      const clearColor = t.text; // clear word is always white (real TETR.IO); prefix/B2B/combo carry the color
       this._action = {
         prefix: pc.tspin === 'full' ? 'T-SPIN' : pc.tspin === 'mini' ? 'MINI T-SPIN' : null,
         clearType: isTspin && pc.lines === 4 ? 'QUAD' : (typeNames[pc.kind] ?? ''),
@@ -339,7 +339,7 @@ export class GameScreen implements Screen {
         let color = a.color;
         if (age > LIFE * 0.6) color = dimRGB(color, 1 - ((age - LIFE * 0.6) / (LIFE * 0.4)) * 0.85);
         const ax = startX; // left panel column, freed middle-left
-        let ay = boardY + 6;
+        let ay = boardY + 7;
         if (a.prefix) { buf.drawText(ax, ay, a.prefix, { fg: t.accent, bold: true }); ay += 1; }
         const clearH = a.size === 'big' ? 7 : 4;
         renderBigText(buf, ax, ay, a.clearType, { fg: color, bold: true }, a.size);
@@ -398,7 +398,7 @@ export class GameScreen implements Screen {
       const cy = boardY + Math.floor(bh / 2) - 4;
       // Clean full-width modal: cover the whole game area (board + panels) so no panel is half-clipped.
       const gcx = Math.floor((startX + nextX + panelW) / 2);
-      const scrimX = startX - 1, scrimY = boardY - 1, scrimW = (nextX + panelW) - startX + 2, scrimH = bh + 2;
+      const scrimX = startX - 1, scrimY = boardY - 1, scrimW = (nextX + panelW) - startX + 2, scrimH = bh + 4; // cover the taller NEXT panel too
       buf.fillRect(scrimX, scrimY, scrimW, scrimH, ' ', { bg: t.bg });
       if (buf.drawBox) buf.drawBox(scrimX, scrimY, scrimW, scrimH, { fg: t.borderSubtle });
       if (result === 'win') {

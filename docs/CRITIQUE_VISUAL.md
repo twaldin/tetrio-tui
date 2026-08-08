@@ -148,3 +148,33 @@ Reference geometry (measured):
 8. Sprint HUD: visible timer + LINES n/40, solo-appropriate stats.
 9. Remove solo "+N" attack popup / stop edge clipping.
 10. Border/grid/danger/results cosmetics.
+
+
+---
+# RE-REVIEW ADDENDUM (build after fixes) — verified against newest /tmp/final_game (482 frames)
+
+## Verified FIXED
+1. Clear-text placement: fixed anchor left of board (x=117..332, top ~31% down), horizontal,
+   clears the board frame (frame at x=337). No more top-edge scatter/clipping. ✔
+2. Combo: "N COMBO" (yellow number + label) directly under the clear text, left of board. ✔
+3. QUAD label confirmed in-game (f0046). No TETRIS wording seen. (T-SPIN / MINI T-SPIN prefix
+   not observable — bot never t-spins in this capture; code-level only.)
+4. Falling piece now drawn in full color mid-fall (f0100 orange L, f0180 blue I). ✔
+5. Ghost is now a subtle dark shadow at the landing site. ✔
+6. Solo HUD: PIECES / LINES n/40 / TIME / PPS plain text left of board; timer visible; versus
+   stats gone; no +N attack popup in solo. ✔
+
+## REMAINING issues (ranked)
+R1. QUAD renders YELLOW (t.warn) — real QUAD is WHITE like every other clear word. Keep the
+    clear word white; only the T-SPIN prefix and B2B line are colored.
+R2. Clear text still collides with the HOLD panel: the top glyph row pokes through the HOLD
+    box's bottom border (zoom-verified f0046). Drop the text block ~2 rows (or shrink HOLD box
+    to ~6 rows) so there is visible air between box and text, as in the real game.
+R3. Line-clear animation is still a flat full-row white→lavender fade. Real flashes white-hot
+    per block and emits rising white sparkle particles. No particles/sweep in mine.
+R4. B2B indicator unverifiable in solo sprint (bot never chains quads/t-spins) — needs a versus
+    or quad-stacking capture to confirm the gold "B2B xN" line renders.
+R5. End screen: green "CLEAR" box + time vs real RESULTS table; also a stray half-drawn panel
+    fragment renders at bottom-right of the CLEAR overlay (f0475, x~530..745, y~595..625).
+R6. Real versus shows a small stylized combo number flashing AT the clear site on the board
+    (rf_0400: "3" and "2" on the boards) — optional flourish, not present in mine.

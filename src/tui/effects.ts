@@ -569,6 +569,25 @@ export class EffectManager {
         }
       }
     }
+
+    // Rising sparkle particles above the cleared rows (TETR.IO: white sparkle/diamond fragments
+    // scatter upward as the lines dissolve). Pseudo-random positions, rising over time.
+    if (age >= 2 && age <= 9) {
+      const topRow = Math.min(...rows);
+      const sparkleChars = ['\u2726', '\u25aa', '\u00b7', '\u2737']; // ✦ ▪ · ✷
+      for (let i = 0; i < 6; i++) {
+        // deterministic pseudo-random per particle + frame so they don't jitter randomly
+        const seed = (i * 37 + topRow * 11) % 100;
+        const sx = bx + ((seed * 7 + i * 13) % (boardW * 2));
+        const rise = Math.floor((age - 2) * 0.8) + (seed % 3);
+        const sy = by + topRow - 1 - rise;
+        if (sy >= 0 && sx >= 0 && sx < buf.width) {
+          const fade = Math.max(0, 1 - (age - 2) / 8);
+          const sparkColor: RGB = [Math.round(255 * fade), Math.round(255 * fade), Math.round(220 * fade)];
+          buf.set(sx, sy, sparkleChars[(seed + age) % sparkleChars.length], { fg: sparkColor });
+        }
+      }
+    }
     // Frames 9+: gravity collapse — handled by the engine itself
   }
 

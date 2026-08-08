@@ -282,7 +282,9 @@ export class GameScreen implements Screen {
         { x: buf.width - textW - margin, y: buf.height - GLYPH_H - 1 }, // bottom-right
       ].filter((s) => s.x >= 0 && s.x + textW <= buf.width - 1);
       const spot = spots.length ? spots[(Math.random() * spots.length) | 0] : { x: margin, y: 1 };
-      this.fx.spawnBigText(clearLabel, clearColor as RGB, spot.x, spot.y, 'small', true, 0);
+      if (this.ctrl.result === 'playing') {
+        this.fx.spawnBigText(clearLabel, clearColor as RGB, spot.x, spot.y, 'small', true, 0);
+      }
       // Attack amount popup (small, only for meaningful attacks, just below the clear label)
       if (pc.attack >= 2) {
         const atkText = `+${pc.attack}`;
@@ -298,11 +300,11 @@ export class GameScreen implements Screen {
     // Combo zone: centered below the board (clear of the HOLD/STATS panels on the left)
     const comboZoneX = boardX + bw - 4;
     const comboZoneY = boardY + bh + 1;
-    if (s.combo > 1) {
+    if (this.ctrl.result === 'playing' && s.combo > 1) {
       this.fx.spawnComboZone(s.combo - 1, [t.warn[0], t.warn[1], t.warn[2]] as RGB, comboZoneX, comboZoneY);
     }
     // B2B zone: to the right of the combo counter
-    if (s.btb > 1) {
+    if (this.ctrl.result === 'playing' && s.btb > 1) {
       this.fx.spawnB2BZone(s.btb - 1, [t.accent[0], t.accent[1], t.accent[2]] as RGB, comboZoneX + 7, comboZoneY);
     }
 
@@ -352,19 +354,19 @@ export class GameScreen implements Screen {
       this.fx.clearTransient(); // drop the frozen last-clear label so the overlay reads cleanly
     }
     if (result !== 'playing') {
-      const cx = boardX + bw; // board center (bw cells * 2 wide / 2)
       const cy = boardY + Math.floor(bh / 2) - 4;
-      // Cover the whole board with a dark scrim so the result reads cleanly.
-      const scrimX = boardX - 1, scrimY = boardY - 1, scrimW = bw * 2 + 2, scrimH = bh + 2;
+      // Clean full-width modal: cover the whole game area (board + panels) so no panel is half-clipped.
+      const gcx = Math.floor((startX + nextX + panelW) / 2);
+      const scrimX = startX - 1, scrimY = boardY - 1, scrimW = (nextX + panelW) - startX + 2, scrimH = bh + 2;
       buf.fillRect(scrimX, scrimY, scrimW, scrimH, ' ', { bg: t.bg });
       if (buf.drawBox) buf.drawBox(scrimX, scrimY, scrimW, scrimH, { fg: t.borderSubtle });
       if (result === 'win') {
-        renderBigTextCentered(buf, cx, cy + 1, 'CLEAR', { fg: t.good, bold: true }, 'big');
+        renderBigTextCentered(buf, gcx, cy + 1, 'CLEAR', { fg: t.good, bold: true }, 'big');
         const tsec = this.ctrl.finalTime / 60;
         center(buf, cy + 7, `${tsec.toFixed(2)}s`, { fg: t.text, bold: true });
         center(buf, cy + 9, 'esc back', _s.dimS);
       } else {
-        renderBigTextCentered(buf, cx, cy + 1, 'TOP OUT', { fg: t.bad, bold: true }, 'big');
+        renderBigTextCentered(buf, gcx, cy + 1, 'TOP OUT', { fg: t.bad, bold: true }, 'big');
         center(buf, cy + 7, 'esc back', _s.dimS);
       }
     } else {

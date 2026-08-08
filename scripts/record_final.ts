@@ -49,9 +49,9 @@ async function main() {
     await term.waitForText('40 LINES', { timeout: 3000 }).catch(() => {});
     await grab(term, 2); // menu
     await term.press('enter');
-    // CALM BEFORE: hold on the (mostly empty) board as the first pieces fall
+    // CALM BEFORE: hold on the (mostly empty) board as the first pieces fall (~1.5s)
     await term.waitIdle({ timeout: 700 }).catch(() => {});
-    await grab(term, 8);
+    await grab(term, 16);
     // the game plays itself at a calm pace until it CLEARS 40 lines (win overlay)
     for (let i = 0; i < 700; i++) {
       await new Promise(r => setTimeout(r, 30));
@@ -59,8 +59,8 @@ async function main() {
       const txt = await term.text({ immediate: true });
       if (/esc back/i.test(txt)) break;
     }
-    // CALM AFTER: hold the CLEAR completion state
-    await grab(term, 30);
+    // CALM AFTER: hold the CLEAR completion state (~3.5s)
+    await grab(term, 40);
     term.killProcess();
   }
   console.log('captured', frames.length, 'frames to', OUT_DIR);

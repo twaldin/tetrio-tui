@@ -10,7 +10,15 @@ import type { BoardGrid, PieceType, Cell } from '../types.js';
 interface Placement { x: number; r: number; score: number; landingY: number }
 
 // Heuristic weights (El-Tetris / Dellacherie style, tuned for 40L sprint efficiency).
-const W = { aggHeight: -0.5, complete: 0.9, holes: -1.2, bumpiness: -0.4, maxHeight: -0.8, wellForI: 0.3 };
+export const W = {
+  aggHeight: -0.5,    // keep the stack low
+  holes: -2.0,        // holes are very bad (messy) — strongest penalty
+  bumpiness: -0.6,    // keep cols 0..8 flat
+  maxHeight: -0.8,    // don't stack high
+  rightWell: 0.4,     // gentle Tetris well on the right column
+  tetris: 0.8,        // reward Tetrises (4-line clears)
+  line: 0.9,          // reward any line clear
+};
 
 function collides(board: BoardGrid, type: PieceType, x: number, y: number, r: number): boolean {
   const cells = PIECE_ROTATIONS[type][r];
@@ -46,7 +54,7 @@ function clearRows(board: BoardGrid): { board: BoardGrid; cleared: number } {
   return { board: nb, cleared };
 }
 
-function evaluate(board: BoardGrid): number {
+function evaluate(board: BoardGrid, cleared: number): number {
   const h = board.length, w = board[0].length;
   const heights: number[] = [];
   let holes = 0, aggHeight = 0;
@@ -60,16 +68,18 @@ function evaluate(board: BoardGrid): number {
     heights.push(colHeight);
     aggHeight += colHeight;
   }
+  // bumpiness over the stacking columns (exclude the right well column so the well isn't penalized)
   let bumpiness = 0;
-  for (let x = 0; x < w - 1; x++) bumpiness += Math.abs(heights[x] - heights[x + 1]);
+  for (let x = 0; x < w - 2; x++) bumpiness += Math.abs(heights[x] - heights[x + 1]);
   const maxHeight = Math.max(...heights);
-  // well for I piece (a column much lower than neighbors)
-  let wellForI = 0;
-  for (let x = 0; x < w; x++) {
-    const l = x > 0 ? heights[x - 1] : 99, r = x < w - 1 ? heights[x + 1] : 99;
-    if (heights[x] < l - 2 && heights[x] < r - 2) wellForI = Math.max(wellForI, Math.min(l, r) - heights[x]);
-  }
-  return W.aggHeight * aggHeight + W.holes * holes + W.bumpiness * bumpiness + W.maxHeight * maxHeight + W.wellForI * wellForI;
+  // Tetris well on the RIGHT column: reward col (w-1) sitting lower than col (w-2)
+  const rightWell = Math.max(0, heights[w - 2] - heights[w - 1]);
+  const tetrisBonus = cleared === 4 ? 1 : 0;
+  const lineBonus = cleared === 4 ? 0 : cleared;
+  return (
+    W.aggHeight * aggHeight + W.holes * holes + W.bumpiness * bumpiness + W.maxHeight * maxHeight
+    + W.rightWell * rightWell + W.tetris * tetrisBonus + W.line * lineBonus
+  );
 }
 
 /** Pick the best placement for the current piece. Returns {x, r} of the best placement. */
@@ -83,7 +93,7 @@ export function bestPlacement(board: BoardGrid, type: PieceType): { x: number; r
       const ly = dropY(board, type, x, startY, r);
       const locked = lockInto(board, type, x, ly, r);
       const { board: cleared, cleared: clearedCount } = clearRows(locked);
-      let score = evaluate(cleared) + W.complete * clearedCount;
+      const score = evaluate(cleared, clearedCount);
       if (score > best.score) best = { x, r, score, landingY: ly };
     }
   }

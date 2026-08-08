@@ -11,8 +11,8 @@ import { visibleBoard, BUFFER_ROWS } from '../../game/engine.js';
 import { bestPlacement } from '../../game/solver.js';
 import { PIECE_ROTATIONS } from '../../game/pieces.js';
 import type { BoardGrid, FallingPiece } from '../../types.js';
-import { EffectManager } from '../effects.js';
-import { renderBigTextCentered, measureBigText } from '../bigtext.js';
+import { EffectManager, dimRGB } from '../effects.js';
+import { renderBigTextCentered, renderBigText, measureBigText, comboSize } from '../bigtext.js';
 import { playClear, playTSpin, playCombo, playHardDrop, playAllClear, playB2B } from '../sound.js';
 
 export interface GameScreenOpts {
@@ -61,6 +61,11 @@ export class GameScreen implements Screen {
   private autoPlay = false;
   private fx = new EffectManager();
   private _pendingClear: { lines: number; kind: string; tspin: string; attack: number } | null = null;
+  /** The TETR.IO-style action-text block on the left of the board (one at a time). */
+  private _action: {
+    prefix: string | null; clearType: string; size: 'big' | 'small'; color: RGB;
+    b2b: number; combo: number; frame: number;
+  } | null = null;
   private _pendingAllClear = false;
 
   constructor(opts: GameScreenOpts) {
@@ -204,7 +209,7 @@ export class GameScreen implements Screen {
     const sy = this.fx.shakeY;
 
     // layout: hold/stats left, board center, next right, opponents far right
-    const panelW = 13;
+    const panelW = 20;
     const totalW = panelW + 2 + boardW + 2 + panelW + 2 + (hasOpponents ? 14 : 0);
     const startX = Math.max(1, Math.floor((buf.width - totalW) / 2));
     const boardX = startX + panelW + 2 + sx;
@@ -220,21 +225,19 @@ export class GameScreen implements Screen {
     drawPanel(buf, startX, boardY, panelW, 7, 'HOLD');
     drawPiecePreview(buf, startX + 2, boardY + 2, s.hold.piece);
 
-    // STATS panel
-    drawPanel(buf, startX, boardY + 8, panelW, 11, 'STATS');
-    const sx2 = startX + 2;
-    buf.drawText(sx2, boardY + 10, 'APM', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 10, st.apm.toFixed(0), _s.textBold);
-    buf.drawText(sx2, boardY + 11, 'PPS', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 11, st.pps.toFixed(2), _s.textBold);
-    buf.drawText(sx2, boardY + 12, 'VS', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 12, st.vsscore.toFixed(0), _s.textBold);
-    buf.drawText(sx2, boardY + 14, 'ATK', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 14, `${st.garbage.attack}`, _s.accentBold);
-    buf.drawText(sx2, boardY + 15, 'SNT', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 15, `${st.garbage.sent}`, _s.goodBold);
-    buf.drawText(sx2, boardY + 16, 'RCV', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 16, `${st.garbage.received}`, _s.badBold);
+    // STATS — plain text at the bottom-left (TETR.IO style), freeing the middle-left for the
+    // action-text block. Two compact columns.
+    const sx2 = startX;
+    buf.drawText(sx2, boardY + 16, 'APM', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 16, st.apm.toFixed(0), _s.textBold);
+    buf.drawText(sx2, boardY + 17, 'PPS', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 17, st.pps.toFixed(2), _s.textBold);
+    buf.drawText(sx2, boardY + 18, 'VS', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 18, st.vsscore.toFixed(0), _s.textBold);
+    buf.drawText(sx2, boardY + 19, 'ATK', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 19, `${st.garbage.attack}`, _s.accentBold);
+    buf.drawText(sx2, boardY + 20, 'SNT', _s.dimS);
+    buf.drawText(sx2 + 6, boardY + 20, `${st.garbage.sent}`, _s.goodBold);
 
     // main board: strong border + checkerboard interior
     drawBoardBorder(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, _s.borderBrightS);
@@ -268,28 +271,25 @@ export class GameScreen implements Screen {
       // Shake for clears
       const clearMag = isTetris ? 'heavy' : pc.lines >= 3 ? 'medium' : 'light';
       this.fx.spawnShake(clearMag, 0, 1);
-      // Clear-type popup in the blocky font. Big clears (TETRIS/T-SPIN) get the BIG font
-      // + a diagonal slant; normal clears (SINGLE/DOUBLE/TRIPLE) get the SMALL font.
-      // Scattered placement off the play area (random point along the top/bottom edge).
-      const clearLabel = clearText(pc as any);
-      const clearColor = isTetris ? t.warn : pc.tspin ? t.accent : t.text;
-      const isBig = isTetris || pc.tspin === 'full' || pc.tspin === 'mini';
-      const size: 'big' | 'small' = isBig ? 'big' : 'small';
-      const diagonal = isBig; // big clears get the staircase slant
-      const textW = measureBigText(clearLabel, size, diagonal).width;
-      const glyphH = size === 'big' ? 7 : 4;
-      const margin = 2;
-      const maxX = Math.max(margin, buf.width - textW - margin);
-      const px = margin + Math.floor(Math.random() * Math.max(1, maxX - margin)); // scattered x
-      const py = 1; // top edge (the bottom edge holds the combo/b2b counters)
-      if (this.ctrl.result === 'playing') {
-        this.fx.spawnBigText(clearLabel, clearColor as RGB, px, py, size, true, 0, diagonal);
-      }
-      // Attack amount popup (small, only for meaningful attacks, just below the clear label)
-      if (pc.attack >= 2) {
-        const atkText = `+${pc.attack}`;
+      // TETR.IO-style action text: store the block (rendered on the LEFT of the board).
+      // T-SPIN prefix above the clear type; B2B + combo below. One block at a time.
+      const isTspin = pc.tspin === 'full' || pc.tspin === 'mini';
+      const isBig = isTetris || isTspin;
+      const typeNames: Record<string, string> = { single: 'SINGLE', double: 'DOUBLE', triple: 'TRIPLE', tetris: 'TETRIS' };
+      const clearColor = isTetris ? t.warn : isTspin ? t.accent : t.text;
+      this._action = {
+        prefix: pc.tspin === 'full' ? 'T-SPIN' : pc.tspin === 'mini' ? 'MINI T-SPIN' : null,
+        clearType: isTspin && pc.lines === 4 ? 'QUAD' : (typeNames[pc.kind] ?? ''),
+        size: 'small',
+        color: clearColor as RGB,
+        b2b: s.btb > 1 ? s.btb - 1 : 0,
+        combo: s.combo > 1 ? s.combo - 1 : 0,
+        frame: this.frame,
+      };
+      // Attack counter: the number of lines sent to the enemy — the ONLY big diagonal ASCII.
+      if (pc.attack >= 1 && this.ctrl.result === 'playing') {
         const atkColor: RGB = pc.attack >= 4 ? [255, 100, 100] : [255, 200, 100];
-        this.fx.spawnPopup(atkText, atkColor, px, py + glyphH, true, 0);
+        this.fx.spawnBigText(`+${pc.attack}`, atkColor, boardX + bw * 2 + panelW + 6, boardY + bh - 7, 'big', true, 0, true);
       }
     }
     if (this._pendingAllClear) {
@@ -297,20 +297,35 @@ export class GameScreen implements Screen {
       this.fx.spawnAllClear(boardX, boardY, bw);
     }
 
-    // Combo zone: centered below the board (clear of the HOLD/STATS panels on the left)
-    const comboZoneX = boardX + bw - 4;
-    const comboZoneY = boardY + bh + 1;
-    if (this.ctrl.result === 'playing' && s.combo > 1) {
-      this.fx.spawnComboZone(s.combo - 1, [t.warn[0], t.warn[1], t.warn[2]] as RGB, comboZoneX, comboZoneY);
-    }
-    // B2B zone: to the right of the combo counter
-    if (this.ctrl.result === 'playing' && s.btb > 1) {
-      this.fx.spawnB2BZone(s.btb - 1, [t.accent[0], t.accent[1], t.accent[2]] as RGB, comboZoneX + 7, comboZoneY);
-    }
-
     // Once the game ends, drop transient text effects (clear popups, combo/b2b) so the
     // completion overlay reads cleanly — run before rendering them, every frame.
     if (this.ctrl.result !== 'playing') this.fx.clearTransient();
+
+    // TETR.IO-style action-text block on the LEFT of the board (T-SPIN prefix / clear type /
+    // B2B / N COMBO), one at a time, fading out over ~1.5s.
+    if (this._action) {
+      const a = this._action;
+      const age = this.frame - a.frame;
+      const LIFE = 50; // frames at the render rate
+      if (age > LIFE) {
+        this._action = null;
+      } else {
+        let color = a.color;
+        if (age > LIFE * 0.6) color = dimRGB(color, 1 - ((age - LIFE * 0.6) / (LIFE * 0.4)) * 0.85);
+        const ax = startX; // left panel column, freed middle-left
+        let ay = boardY + 8;
+        if (a.prefix) { buf.drawText(ax, ay, a.prefix, { fg: t.accent, bold: true }); ay += 1; }
+        const clearH = a.size === 'big' ? 7 : 4;
+        renderBigText(buf, ax, ay, a.clearType, { fg: color, bold: true }, a.size);
+        ay += clearH;
+        if (a.b2b > 0) { buf.drawText(ax, ay, `B2B x${a.b2b}`, { fg: t.accent, bold: true }); ay += 1; }
+        if (a.combo > 0) {
+          renderBigText(buf, ax, ay, String(a.combo), { fg: t.warn, bold: true }, comboSize(a.combo));
+          const cw = measureBigText(String(a.combo), comboSize(a.combo)).width;
+          buf.drawText(ax + cw + 1, ay + (comboSize(a.combo) === 'big' ? 5 : 2), 'COMBO', { fg: t.text, bold: true });
+        }
+      }
+    }
 
     // Render all EffectManager overlays
     this.fx.render(buf, boardX, boardY, bw, bh);

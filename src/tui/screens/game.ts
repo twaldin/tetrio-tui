@@ -178,7 +178,7 @@ export class GameScreen implements Screen {
     f.r = r;
     f.x = x;
     this.ctrl.setInput({ hardDrop: true });
-    this.autoPlayCooldown = 3; // a few settle frames per piece => readable sprint pace
+    this.autoPlayCooldown = 5; // a few settle frames per piece => readable sprint pace
   }
 
   render(buf: RenderBuffer): void {

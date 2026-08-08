@@ -226,7 +226,7 @@ export class EffectManager {
   /** Line-clear flash+sweep animation. */
   spawnLineClear(rows: number[], boardW: number, pieceType: string, isTetris: boolean): void {
     if (_animIntensity === 0) return;
-    const life = Math.max(1, Math.round(12 * _animIntensity / 100));
+    const life = Math.max(1, Math.round(9 * _animIntensity / 100));
     this.effects.push({
       kind: 'lineClear', age: 0, life,
       rows: rows.slice(),
@@ -499,9 +499,7 @@ export class EffectManager {
       // White flash that fades through piece color to nothing
       const flashIntensity = 1 - (age / 3);
       const white: RGB = [255, 255, 255];
-      const flashColor = isTetris
-        ? lerpRGB(brightenRGB(color, 1.6), white, 0.5 + flashIntensity * 0.5)
-        : lerpRGB(color, white, 0.35 + flashIntensity * 0.65);
+      const flashColor = lerpRGB(white, color, (1 - flashIntensity) * 0.4);
 
       for (const row of rows) {
         const py = by + row;

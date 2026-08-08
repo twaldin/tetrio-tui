@@ -10,6 +10,7 @@ const THEMES = ['tetrio', 'tokyo-night', 'catppuccin', 'gruvbox', 'nord', 'dracu
 
 async function main() {
   const part = process.argv[2] ?? 'game';
+  const DPR = part === 'themes' ? 2 : 1; // crisp stills for themes, fast frames for game
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
   fs.mkdirSync(OUT_DIR, { recursive: true });
   let fi = 0;
@@ -23,7 +24,7 @@ async function main() {
   });
   const grab = async (term: any, n = 1) => {
     for (let i = 0; i < n; i++) {
-      const png = await renderTerminalToImage(term.getTerminalData(), { fontSize: 15, devicePixelRatio: 2 });
+      const png = await renderTerminalToImage(term.getTerminalData(), { fontSize: 15, devicePixelRatio: DPR });
       const p = path.join(OUT_DIR, `f${String(fi++).padStart(4, '0')}.png`);
       fs.writeFileSync(p, png);
       frames.push(p);
@@ -52,14 +53,14 @@ async function main() {
     await term.waitIdle({ timeout: 700 }).catch(() => {});
     await grab(term, 8);
     // the game plays itself at a calm pace until it CLEARS 40 lines (win overlay)
-    for (let i = 0; i < 320; i++) {
-      await new Promise(r => setTimeout(r, 120));
+    for (let i = 0; i < 700; i++) {
+      await new Promise(r => setTimeout(r, 30));
       await grab(term, 1);
       const txt = await term.text({ immediate: true });
-      if (/CLEAR|TOP OUT/i.test(txt)) break;
+      if (/esc back/i.test(txt)) break;
     }
     // CALM AFTER: hold the CLEAR completion state
-    await grab(term, 14);
+    await grab(term, 30);
     term.killProcess();
   }
   console.log('captured', frames.length, 'frames to', OUT_DIR);

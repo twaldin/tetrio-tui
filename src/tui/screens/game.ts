@@ -166,6 +166,7 @@ export class GameScreen implements Screen {
   }
 
   /** Drive the game with the solver (demo auto-play): place each piece at the best spot, instantly. */
+  private _clearedOnEnd = false;
   private autoPlayCooldown = 0;
   private driveAutoPlay(): void {
     const engine = this.ctrl.engine;
@@ -273,7 +274,7 @@ export class GameScreen implements Screen {
       const actionX = -1; // -1 = centered on the board
       const actionY = boardY + 2; // over the (empty) top of the board during a clear
       const textSize = 'small'; // small (3 rows) is legible without dominating the board
-      this.fx.spawnBigText(clearLabel, clearColor as RGB, actionX, actionY, textSize as 'big' | 'small', true, 1);
+      this.fx.spawnBigText(clearLabel, clearColor as RGB, actionX, actionY, textSize as 'big' | 'small', true, 0);
       // Attack amount popup (small, only for meaningful attacks, below the clear label)
       if (pc.attack >= 2) {
         const atkText = `+${pc.attack}`;
@@ -286,14 +287,15 @@ export class GameScreen implements Screen {
       this.fx.spawnAllClear(boardX, boardY, bw);
     }
 
-    // Combo zone: left of board (TETR.IO style — big number on the side)
-    const comboZoneX = boardX - 10;
+    // Combo zone: centered below the board (clear of the HOLD/STATS panels on the left)
+    const comboZoneX = boardX + bw - 4;
+    const comboZoneY = boardY + bh + 1;
     if (s.combo > 1) {
-      this.fx.spawnComboZone(s.combo - 1, [t.warn[0], t.warn[1], t.warn[2]] as RGB, comboZoneX, boardY + bh - 8);
+      this.fx.spawnComboZone(s.combo - 1, [t.warn[0], t.warn[1], t.warn[2]] as RGB, comboZoneX, comboZoneY);
     }
-    // B2B zone: below combo
+    // B2B zone: to the right of the combo counter
     if (s.btb > 1) {
-      this.fx.spawnB2BZone(s.btb - 1, [t.accent[0], t.accent[1], t.accent[2]] as RGB, comboZoneX, boardY + bh - 3);
+      this.fx.spawnB2BZone(s.btb - 1, [t.accent[0], t.accent[1], t.accent[2]] as RGB, comboZoneX + 7, comboZoneY);
     }
 
     // Render all EffectManager overlays
@@ -334,19 +336,28 @@ export class GameScreen implements Screen {
       }
     }
 
-    // Game-over overlay: sprint completion (win) or topout
+    // Game-over overlay: sprint completion (win) or topout.
+    // Draw a dark scrim behind the text so it reads over the frozen board stack.
     const result = this.ctrl.result;
+    if (result !== 'playing' && !this._clearedOnEnd) {
+      this._clearedOnEnd = true;
+      this.fx.clearTransient(); // drop the frozen last-clear label so the overlay reads cleanly
+    }
     if (result !== 'playing') {
       const cx = boardX + bw; // board center (bw cells * 2 wide / 2)
       const cy = boardY + Math.floor(bh / 2) - 4;
+      // Cover the whole board with a dark scrim so the result reads cleanly.
+      const scrimX = boardX - 1, scrimY = boardY - 1, scrimW = bw * 2 + 2, scrimH = bh + 2;
+      buf.fillRect(scrimX, scrimY, scrimW, scrimH, ' ', { bg: t.bg });
+      if (buf.drawBox) buf.drawBox(scrimX, scrimY, scrimW, scrimH, { fg: t.borderSubtle });
       if (result === 'win') {
-        renderBigTextCentered(buf, cx, cy, 'CLEAR', { fg: t.good, bold: true }, 'big');
+        renderBigTextCentered(buf, cx, cy + 1, 'CLEAR', { fg: t.good, bold: true }, 'big');
         const tsec = this.ctrl.finalTime / 60;
-        center(buf, cy + 6, `${tsec.toFixed(2)}s`, { fg: t.text, bold: true });
-        center(buf, cy + 8, 'esc back', _s.dimS);
+        center(buf, cy + 7, `${tsec.toFixed(2)}s`, { fg: t.text, bold: true });
+        center(buf, cy + 9, 'esc back', _s.dimS);
       } else {
-        renderBigTextCentered(buf, cx, cy, 'TOP OUT', { fg: t.bad, bold: true }, 'big');
-        center(buf, cy + 6, 'esc back', _s.dimS);
+        renderBigTextCentered(buf, cx, cy + 1, 'TOP OUT', { fg: t.bad, bold: true }, 'big');
+        center(buf, cy + 7, 'esc back', _s.dimS);
       }
     } else {
       center(buf, buf.height - 2, 'esc forfeit', _s.faintS);

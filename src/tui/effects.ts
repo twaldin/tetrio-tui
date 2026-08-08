@@ -385,6 +385,14 @@ export class EffectManager {
     }
   }
 
+  /** Remove transient text effects (bigText/popup/combo/b2b) — used on game-over so the
+   *  completion overlay shows cleanly without a frozen last-clear label. */
+  clearTransient(): void {
+    this.effects = this.effects.filter(
+      (e) => e.kind !== 'bigText' && e.kind !== 'popupText' && e.kind !== 'comboZone' && e.kind !== 'b2bZone',
+    );
+  }
+
   private _computeShake(e: ScreenShakeEffect): void {
     const progress = e.age / e.life; // 0→1
     // Exponential decay for more natural feel (like TETR.IO)

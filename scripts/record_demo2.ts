@@ -4,7 +4,7 @@ import { renderTerminalToImage } from 'ghostty-opentui/image';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const OUT_DIR = '/tmp/tui_demo2';
+const OUT_DIR = process.argv[3] ?? '/tmp/tui_demo2';
 const COLS = 100, ROWS = 34;
 const THEMES = ['tetrio', 'tokyo-night', 'catppuccin', 'gruvbox', 'nord', 'dracula', 'solarized', 'monokai'];
 

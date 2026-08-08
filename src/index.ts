@@ -5,6 +5,7 @@ import { TerminalDriver } from './tui/driver.js';
 import { LoginScreen, type LoginResult } from './tui/screens/login.js';
 import { TetrioSession } from './net/session.js';
 import { TetrioApp } from './tui/main.js';
+import { setTheme, getThemeKey } from './tui/themes.js';
 
 const HELP = `tetrio-tui — a terminal TETR.IO client
 
@@ -20,6 +21,15 @@ async function main(): Promise<void> {
 
   const driver = new TerminalDriver();
   const app = new App(driver);
+
+  // Load theme: CLI --theme > env TETRIO_THEME > config store default ('tetrio').
+  {
+    const themeArg = args.indexOf('--theme');
+    const cliTheme = themeArg >= 0 ? args[themeArg + 1] : undefined;
+    const envTheme = process.env.TETRIO_THEME;
+    const chosen = cliTheme ?? envTheme;
+    if (chosen) setTheme(chosen);
+  }
   const session = new TetrioSession();
   const tetrioApp = new TetrioApp(app, session);
 

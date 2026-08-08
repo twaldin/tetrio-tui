@@ -141,13 +141,10 @@ export class GameScreen implements Screen {
     if (this.autoPlayCooldown > 0) { this.autoPlayCooldown--; return; }
     const board = visibleBoard(engine.state.board);
     const { x, r } = bestPlacement(board, f.type);
-    // Apply rotation + position directly (validated), then hard drop.
     f.r = r;
-    // Check collision on the FULL board at the piece's actual y (buffer coords).
-    if (!collidesFor(engine.state.board, f.type, x, Math.floor(f.y), r)) f.x = x;
-    // hard drop: set true; the tick in this same update() reads it, then release next frame.
+    f.x = x;
     this.ctrl.setInput({ hardDrop: true });
-    this.autoPlayCooldown = 1; // one settle frame between placements (visible)
+    this.autoPlayCooldown = 3; // a few settle frames per piece => readable sprint pace
   }
 
   render(buf: RenderBuffer): void {

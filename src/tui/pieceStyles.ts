@@ -118,19 +118,19 @@ function sc(): StyleCaches {
     _theme: t,
     bevel: {
       cell: bevel_c,
-      ghost: { fg: tint(gc, 0.45), bg: shade(gc, 0.28) },
+      ghost: { fg: tint(gc, 0.22), bg: shade(gc, 0.16) },
     },
     flat: {
       cell: flat_c,
-      ghost: { fg: tint(gc, 0.5), bg: shade(gc, 0.30) },
+      ghost: { fg: tint(gc, 0.24), bg: shade(gc, 0.16) },
     },
     outline: {
       cell: outline_c,
-      ghost: { fg: gc, bg: shade(gc, 0.30) },
+      ghost: { fg: tint(gc, 0.25), bg: shade(gc, 0.16) },
     },
     gradient: {
       cell: gradient_c,
-      ghost: { fg: tint(gc, 0.10), bg: shade(gc, 0.45) },
+      ghost: { fg: tint(gc, 0.18), bg: shade(gc, 0.14) },
     },
   };
   return _sc;
@@ -158,8 +158,8 @@ const BEVEL: PieceStyleDef = {
   },
   drawGhost(buf, px, py) {
     const s = sc().bevel.ghost;
-    buf.set(px, py, '\u2592', s);       // ▒
-    buf.set(px + 1, py, '\u2592', s);   // ▒
+    buf.set(px, py, '\u2591', s);       // ░
+    buf.set(px + 1, py, '\u2591', s);   // ░
   },
 };
 
@@ -174,8 +174,8 @@ const FLAT: PieceStyleDef = {
   },
   drawGhost(buf, px, py) {
     const s = sc().flat.ghost;
-    buf.set(px, py, '\u2592', s);       // ▒
-    buf.set(px + 1, py, '\u2592', s);   // ▒
+    buf.set(px, py, '\u2591', s);       // ░
+    buf.set(px + 1, py, '\u2591', s);   // ░
   },
 };
 

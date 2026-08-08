@@ -12,6 +12,7 @@ import { bestPlacement } from '../../game/solver.js';
 import { PIECE_ROTATIONS } from '../../game/pieces.js';
 import type { BoardGrid, FallingPiece } from '../../types.js';
 import { EffectManager, dimRGB } from '../effects.js';
+import { pieceStyleDef } from '../pieceStyles.js';
 import { renderBigTextCentered, renderBigText, measureBigText, comboSize } from '../bigtext.js';
 import { playClear, playTSpin, playCombo, playHardDrop, playAllClear, playB2B } from '../sound.js';
 
@@ -49,6 +50,8 @@ interface Effect {
 export class GameScreen implements Screen {
   readonly name = 'game';
   private ctrl: LocalGameController;
+  /** Versus modes (league/versus) show attack UI; solo sprint modes (40L/blitz/zen/practice) don't. */
+  private get isVersus(): boolean { return !['40 LINES', 'BLITZ', 'ZEN', 'PRACTICE'].includes(this.modeLabel); }
   private opponents: OpponentTracker;
   private onExit: () => void;
   private modeLabel: string;
@@ -209,40 +212,61 @@ export class GameScreen implements Screen {
     const sy = this.fx.shakeY;
 
     // layout: hold/stats left, board center, next right, opponents far right
-    const panelW = 20;
+    const panelW = 24;
     const totalW = panelW + 2 + boardW + 2 + panelW + 2 + (hasOpponents ? 14 : 0);
     const startX = Math.max(1, Math.floor((buf.width - totalW) / 2));
     const boardX = startX + panelW + 2 + sx;
     const boardY = Math.max(2, Math.floor((buf.height - bh) / 2) - 1) + sy;
 
-    // title + timer
+    // title (mode label) — the timer moves into the left stats stack (never on the border row)
     center(buf, boardY - 2, this.modeLabel, _s.accentBold);
     const st = s.stats;
     const secs = Math.floor(st.currentTime / 60);
-    center(buf, boardY - 1, formatTime(secs), _s.dimS);
 
     // HOLD panel
     drawPanel(buf, startX, boardY, panelW, 7, 'HOLD');
     drawPiecePreview(buf, startX + 2, boardY + 2, s.hold.piece);
 
     // STATS — plain text at the bottom-left (TETR.IO style), freeing the middle-left for the
-    // action-text block. Two compact columns.
+    // action-text block. Solo sprint shows PIECES/LINES/TIME/PPS; versus shows APM/PPS/VS/ATK/SNT.
     const sx2 = startX;
-    buf.drawText(sx2, boardY + 16, 'APM', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 16, st.apm.toFixed(0), _s.textBold);
-    buf.drawText(sx2, boardY + 17, 'PPS', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 17, st.pps.toFixed(2), _s.textBold);
-    buf.drawText(sx2, boardY + 18, 'VS', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 18, st.vsscore.toFixed(0), _s.textBold);
-    buf.drawText(sx2, boardY + 19, 'ATK', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 19, `${st.garbage.attack}`, _s.accentBold);
-    buf.drawText(sx2, boardY + 20, 'SNT', _s.dimS);
-    buf.drawText(sx2 + 6, boardY + 20, `${st.garbage.sent}`, _s.goodBold);
+    const solo = !this.isVersus;
+    if (solo) {
+      buf.drawText(sx2, boardY + 15, 'PIECES', _s.dimS);
+      buf.drawText(sx2 + 8, boardY + 15, `${st.piecesplaced}`, _s.textBold);
+      buf.drawText(sx2, boardY + 16, 'LINES', _s.dimS);
+      buf.drawText(sx2 + 8, boardY + 16, `${st.lines}/40`, _s.textBold);
+      buf.drawText(sx2, boardY + 17, 'TIME', _s.dimS);
+      buf.drawText(sx2 + 8, boardY + 17, formatTime(secs), _s.textBold);
+      buf.drawText(sx2, boardY + 18, 'PPS', _s.dimS);
+      buf.drawText(sx2 + 8, boardY + 18, st.pps.toFixed(2), _s.textBold);
+    } else {
+      buf.drawText(sx2, boardY + 15, 'APM', _s.dimS);
+      buf.drawText(sx2 + 6, boardY + 15, st.apm.toFixed(0), _s.textBold);
+      buf.drawText(sx2, boardY + 16, 'PPS', _s.dimS);
+      buf.drawText(sx2 + 6, boardY + 16, st.pps.toFixed(2), _s.textBold);
+      buf.drawText(sx2, boardY + 17, 'VS', _s.dimS);
+      buf.drawText(sx2 + 6, boardY + 17, st.vsscore.toFixed(0), _s.textBold);
+      buf.drawText(sx2, boardY + 18, 'ATK', _s.dimS);
+      buf.drawText(sx2 + 6, boardY + 18, `${st.garbage.attack}`, _s.accentBold);
+      buf.drawText(sx2, boardY + 19, 'SNT', _s.dimS);
+      buf.drawText(sx2 + 6, boardY + 19, `${st.garbage.sent}`, _s.goodBold);
+    }
 
     // main board: strong border + checkerboard interior
     drawBoardBorder(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, _s.borderBrightS);
     const ghostSet = computeGhostSet(s.falling);
     drawBoard(buf, boardX, boardY, board, { ghostSet });
+    // Draw the ACTIVE (falling) piece in full color — real TETR.IO shows it mid-fall.
+    if (s.falling) {
+      const style = pieceStyleDef();
+      const cells = PIECE_ROTATIONS[s.falling.type as keyof typeof PIECE_ROTATIONS][s.falling.r];
+      const fy = Math.floor(s.falling.y) - BUFFER_ROWS;
+      for (const [cx, cy] of cells) {
+        const bx = s.falling.x + cx, by = fy + cy;
+        if (by >= 0 && bx >= 0) style.drawMino(buf, boardX + bx * 2, boardY + by, s.falling.type as any);
+      }
+    }
 
     // NEXT panel
     const nextX = boardX + boardW + 2;
@@ -275,7 +299,7 @@ export class GameScreen implements Screen {
       // T-SPIN prefix above the clear type; B2B + combo below. One block at a time.
       const isTspin = pc.tspin === 'full' || pc.tspin === 'mini';
       const isBig = isTetris || isTspin;
-      const typeNames: Record<string, string> = { single: 'SINGLE', double: 'DOUBLE', triple: 'TRIPLE', tetris: 'TETRIS' };
+      const typeNames: Record<string, string> = { single: 'SINGLE', double: 'DOUBLE', triple: 'TRIPLE', tetris: 'QUAD' };
       const clearColor = isTetris ? t.warn : isTspin ? t.accent : t.text;
       this._action = {
         prefix: pc.tspin === 'full' ? 'T-SPIN' : pc.tspin === 'mini' ? 'MINI T-SPIN' : null,
@@ -288,7 +312,8 @@ export class GameScreen implements Screen {
       };
       // Attack counter: the number of lines sent to the enemy — the ONLY big diagonal ASCII.
       // It appears on the right and drifts down-left as it fades (matching the real game).
-      if (pc.attack >= 1 && this.ctrl.result === 'playing') {
+      // Only in versus modes — solo sprint (40L/blitz/zen/practice) has no opponent, no attack UI.
+      if (pc.attack >= 1 && this.ctrl.result === 'playing' && this.isVersus) {
         const atkColor: RGB = pc.attack >= 4 ? [255, 100, 100] : [255, 200, 100];
         this.fx.spawnBigText(`+${pc.attack}`, atkColor, boardX + bw * 2 + panelW + 8, boardY + bh - 8, 'big', true, 0, true, -1, 1);
       }
@@ -314,7 +339,7 @@ export class GameScreen implements Screen {
         let color = a.color;
         if (age > LIFE * 0.6) color = dimRGB(color, 1 - ((age - LIFE * 0.6) / (LIFE * 0.4)) * 0.85);
         const ax = startX; // left panel column, freed middle-left
-        let ay = boardY + 8;
+        let ay = boardY + 6;
         if (a.prefix) { buf.drawText(ax, ay, a.prefix, { fg: t.accent, bold: true }); ay += 1; }
         const clearH = a.size === 'big' ? 7 : 4;
         renderBigText(buf, ax, ay, a.clearType, { fg: color, bold: true }, a.size);

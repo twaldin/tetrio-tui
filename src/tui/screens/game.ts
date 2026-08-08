@@ -402,10 +402,22 @@ export class GameScreen implements Screen {
       buf.fillRect(scrimX, scrimY, scrimW, scrimH, ' ', { bg: t.bg });
       if (buf.drawBox) buf.drawBox(scrimX, scrimY, scrimW, scrimH, { fg: t.borderSubtle });
       if (result === 'win') {
-        renderBigTextCentered(buf, gcx, cy, 'CLEAR', { fg: t.good, bold: true }, 'big');
+        renderBigTextCentered(buf, gcx, cy - 2, 'CLEAR', { fg: t.good, bold: true }, 'big');
         const tsec = this.ctrl.finalTime / 60;
-        center(buf, cy + 8, `${tsec.toFixed(2)}s`, { fg: t.text, bold: true });
-        center(buf, cy + 10, 'esc back', _s.dimS);
+        // RESULTS table (real TETR.IO shows one after a sprint)
+        const rs = s.stats;
+        const ry = cy + 6;
+        const row = (dy: number, k: string, v: string) => {
+          buf.drawText(gcx - 11, ry + dy, k, { fg: t.dim });
+          buf.drawText(gcx + 3, ry + dy, v, { fg: t.text, bold: true });
+        };
+        row(0, 'PIECES', `${rs.piecesplaced}`);
+        row(1, 'LINES', `${rs.lines}/40`);
+        row(2, 'TIME', `${tsec.toFixed(2)}s`);
+        row(3, 'PPS', rs.pps.toFixed(2));
+        row(4, 'MAX COMBO', `${rs.combomax}`);
+        row(5, 'MAX B2B', `${rs.btbmax}`);
+        center(buf, ry + 7, 'esc back', _s.dimS);
       } else {
         renderBigTextCentered(buf, gcx, cy, 'TOP OUT', { fg: t.bad, bold: true }, 'big');
         center(buf, cy + 8, 'esc back', _s.dimS);

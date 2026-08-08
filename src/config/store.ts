@@ -65,6 +65,7 @@ export interface VideoConfig {
   effects: boolean;       // board shake / clear flashes / popups
   colorMode: ColorMode;
   targetFps: number;
+  theme: string;          // the color theme key (tetrio, catppuccin, ...)
 }
 
 export interface AudioConfig {
@@ -130,7 +131,7 @@ export function defaultConfig(): Config {
     version: CONFIG_VERSION,
     handling: defaultHandling(),
     keybinds: defaultKeybinds(),
-    video: { effects: true, colorMode: 'truecolor', targetFps: 60 },
+    video: { effects: true, colorMode: 'truecolor', targetFps: 60, theme: 'tetrio' },
     audio: { music: 100, sfx: 100 },
     account: { lastUsername: '' },
   };
@@ -318,6 +319,7 @@ export function sanitizeVideo(input: unknown): VideoConfig {
     targetFps: TARGET_FPS_OPTIONS.includes(o.targetFps as number)
       ? (o.targetFps as number)
       : Math.round(clampNum(o.targetFps, 15, 240, d.targetFps)),
+    theme: typeof o.theme === 'string' ? o.theme : d.theme,
   };
 }
 

@@ -13,6 +13,9 @@ import { LeagueScreen } from './screens/league.js';
 import { RoomListingScreen, RoomLobbyScreen } from './screens/lobby.js';
 import { ChannelApi } from '../net/channel.js';
 import { createChannelScreen } from './screens/channel.js';
+import { ConfigStore } from '../config/store.js';
+import { createConfigMenuNode } from './screens/config.js';
+import { setTheme } from './themes.js';
 import type { GameOptions } from '../types.js';
 
 export class TetrioApp {
@@ -22,6 +25,7 @@ export class TetrioApp {
   opponents: OpponentTracker;
   gameconn: GameConnection;
   private channelApi = new ChannelApi();
+  private configStore = new ConfigStore();
 
   constructor(app: App, session: TetrioSession) {
     // debug dump set up in showHome
@@ -63,7 +67,16 @@ export class TetrioApp {
     }, 1000);
   }
   private menu(node: MenuNode): MenuScreen {
-    return new MenuScreen(node, { breadcrumb: [node.title], onBack: () => this.app.pop(), pushScreen: (s) => this.push(s) });
+    return new MenuScreen(node, {
+      breadcrumb: [node.title],
+      onBack: () => {
+        // At the root (HOME), escape quits the app. In submenus, escape pops back.
+        if (node.title === 'HOME') { this.session.close(); process.exit(0); }
+        else this.app.pop();
+      },
+      pushScreen: (s) => this.push(s),
+      popScreen: () => this.app.pop(),
+    });
   }
 
   showHome(): void {
@@ -123,15 +136,18 @@ export class TetrioApp {
   }
 
   private configMenu(): MenuNode {
-    return {
-      title: 'CONFIG', color: THEME.config,
-      items: [
-        { id: 'controls', label: 'CONTROLS', sub: 'keybinds', color: THEME.config, action: () => this.notImpl('CONTROLS') },
-        { id: 'handling', label: 'HANDLING', sub: 'DAS / ARR / SDF / DCD', color: THEME.config, action: () => this.notImpl('HANDLING') },
-        { id: 'video', label: 'VIDEO', sub: 'display and effects', color: THEME.config, action: () => this.notImpl('VIDEO') },
-        { id: 'audio', label: 'AUDIO', sub: 'volume', color: THEME.config, action: () => this.notImpl('AUDIO') },
-      ],
-    };
+    return createConfigMenuNode({
+      store: this.configStore,
+      onBack: () => this.app.pop(),
+      onChange: () => this.applyConfig(),
+    });
+  }
+
+  /** Apply the persisted config (theme, handling, keybinds) to the running app. */
+  private applyConfig(): void {
+    const cfg = this.configStore.get();
+    if (cfg.video?.theme) setTheme(cfg.video.theme);
+    this.app.requestRender();
   }
 
   // --- launchers ---

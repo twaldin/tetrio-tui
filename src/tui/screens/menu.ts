@@ -27,14 +27,16 @@ export class MenuScreen implements Screen {
   protected idx = 0;
   private onBack: (() => void) | null;
   private pushScreen: (s: Screen) => void;
+  private popScreen: () => void;
   private breadcrumb: string[];
 
-  constructor(node: MenuNode, opts: { breadcrumb?: string[]; onBack?: () => void; pushScreen: (s: Screen) => void }) {
+  constructor(node: MenuNode, opts: { breadcrumb?: string[]; onBack?: () => void; pushScreen: (s: Screen) => void; popScreen?: () => void }) {
     this.node = node;
     this.name = node.title;
     this.breadcrumb = opts.breadcrumb ?? [node.title];
     this.onBack = opts.onBack ?? null;
     this.pushScreen = opts.pushScreen;
+    this.popScreen = opts.popScreen ?? (() => {});
     this.skipDisabled(1);
   }
 
@@ -62,8 +64,9 @@ export class MenuScreen implements Screen {
     else if (item.submenu) {
       this.pushScreen(new MenuScreen(item.submenu, {
         breadcrumb: [...this.breadcrumb, item.submenu.title],
-        onBack: () => {}, // parent handles pop via app
+        onBack: () => this.popScreen(), // escape in a submenu pops back to the parent
         pushScreen: this.pushScreen,
+        popScreen: this.popScreen,
       }));
     } else item.action?.();
   }

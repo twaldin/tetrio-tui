@@ -2,7 +2,7 @@
  * The game screen: local board + opponents + stats + effects.
  * Used for versus (league/custom) AND offline practice (solo modes).
  */
-import type { RenderBuffer, Screen, KeyEvent, Style } from '../app.js';
+import type { RenderBuffer, Screen, KeyEvent, Style, RGB } from '../app.js';
 import { THEME, PIECE_COLORS, drawBoard, drawPiecePreview, drawBox, drawBoardBorder, drawPanel, center, pieceColor } from '../draw.js';
 import { theme } from '../themes.js';
 import { LocalGameController } from '../../game/localgame.js';
@@ -12,6 +12,7 @@ import { bestPlacement } from '../../game/solver.js';
 import { PIECE_ROTATIONS } from '../../game/pieces.js';
 import type { BoardGrid, FallingPiece } from '../../types.js';
 import { EffectManager } from '../effects.js';
+import { playClear, playTSpin, playCombo, playHardDrop, playAllClear, playB2B } from '../sound.js';
 
 export interface GameScreenOpts {
   controller: LocalGameController;
@@ -58,6 +59,8 @@ export class GameScreen implements Screen {
   private keymap: Record<string, string>;
   private autoPlay = false;
   private fx = new EffectManager();
+  private _pendingClear: { lines: number; kind: string; tspin: string; attack: number } | null = null;
+  private _pendingAllClear = false;
 
   constructor(opts: GameScreenOpts) {
     this.ctrl = opts.controller;
@@ -69,6 +72,9 @@ export class GameScreen implements Screen {
     this.ctrl.on('attack', (amt: number) => {
       this.effects.push({ kind: 'attack', frame: this.frame, amount: amt });
       this.shakeFrames = Math.min(8, 2 + amt);
+      // Trigger EffectManager shake based on attack amount
+      const mag = amt >= 4 ? 'heavy' : amt >= 2 ? 'medium' : 'light';
+      this.fx.spawnShake(mag, 0, -1); // upward bias for attacks
     });
   }
 
@@ -116,9 +122,37 @@ export class GameScreen implements Screen {
     this.opponents.tickAll();
     if (events) {
       if (events.lines && events.lines.lines > 0) {
-        this.effects.push({ kind: 'lineclear', frame: this.frame, amount: events.lines.attack, text: clearText(events.lines) });
+        const li = events.lines;
+        this.effects.push({ kind: 'lineclear', frame: this.frame, amount: li.attack, text: clearText(li) });
+        // EffectManager: line clear animation on the board
+        // (rows will be computed in render when we know boardY)
+        this._pendingClear = { lines: li.lines, kind: li.kind, tspin: li.tspin, attack: li.attack };
+        // Sound effects
+        if (li.tspin === 'full' || li.tspin === 'mini') {
+          void playTSpin();
+        } else {
+          void playClear(li.kind);
+        }
+        // Combo sound (rising pitch)
+        const eng = this.ctrl.engine;
+        const eState = eng?.state;
+        if (eState && eState.combo > 1) {
+          void playCombo(eState.combo - 1);
+        }
+        // B2B sound
+        if (eState && eState.btb > 1 && eState.btb > this.lastBtb) {
+          void playB2B();
+        }
+        if (eState) {
+          this.lastBtb = eState.btb;
+          this.lastCombo = eState.combo;
+        }
       }
-      if (events.lines?.allclear) this.effects.push({ kind: 'allclear', frame: this.frame, text: 'ALL CLEAR' });
+      if (events.lines?.allclear) {
+        this.effects.push({ kind: 'allclear', frame: this.frame, text: 'ALL CLEAR' });
+        this._pendingAllClear = true;
+        void playAllClear();
+      }
       if (events.gameover) this.effects.push({ kind: 'garbage', frame: this.frame, text: 'TOP OUT' });
     }
     // age effects (in-place to avoid array allocation)
@@ -161,15 +195,18 @@ export class GameScreen implements Screen {
     const boardW = bw * 2;
     const hasOpponents = this.opponents.views.size > 0;
 
-    // shake offset
-    const sx = this.shakeFrames > 0 ? (this.frame % 2 === 0 ? 1 : -1) * Math.min(2, this.shakeFrames) : 0;
+    // shake offset — combine old simple shake with EffectManager's directional shake
+    this.fx.advance();
+    const oldSx = this.shakeFrames > 0 ? (this.frame % 2 === 0 ? 1 : -1) * Math.min(2, this.shakeFrames) : 0;
+    const sx = oldSx + this.fx.shakeX;
+    const sy = this.fx.shakeY;
 
     // layout: hold/stats left, board center, next right, opponents far right
     const panelW = 13;
     const totalW = panelW + 2 + boardW + 2 + panelW + 2 + (hasOpponents ? 14 : 0);
     const startX = Math.max(1, Math.floor((buf.width - totalW) / 2));
     const boardX = startX + panelW + 2 + sx;
-    const boardY = Math.max(2, Math.floor((buf.height - bh) / 2) - 1);
+    const boardY = Math.max(2, Math.floor((buf.height - bh) / 2) - 1) + sy;
 
     // title + timer
     center(buf, boardY - 2, this.modeLabel, _s.accentBold);
@@ -215,9 +252,50 @@ export class GameScreen implements Screen {
       }
     }
 
-    // combo / b2b
-    if (s.combo > 1) buf.drawText(boardX, boardY + bh + 2, `COMBO x${s.combo - 1}`, { fg: t.warn, bold: true });
-    if (s.btb > 1) buf.drawText(boardX + 12, boardY + bh + 2, `B2B x${s.btb - 1}`, { fg: t.accent, bold: true });
+    // Process pending effects now that we know board coordinates
+    if (this._pendingClear) {
+      const pc = this._pendingClear;
+      this._pendingClear = null;
+      const clearKind = pc.kind;
+      const isTetris = clearKind === 'tetris';
+      const pieceType = 't'; // default piece type for color
+      // Trigger line clear animation (visual rows — approximate from bottom)
+      const clearRows: number[] = [];
+      for (let i = 0; i < pc.lines; i++) clearRows.push(bh - 1 - i);
+      this.fx.spawnLineClear(clearRows, bw, pieceType, isTetris);
+      // Shake for clears
+      const clearMag = isTetris ? 'heavy' : pc.lines >= 3 ? 'medium' : 'light';
+      this.fx.spawnShake(clearMag, 0, 1);
+      // Big text: clear type over the board (near the cleared rows)
+      const clearLabel = clearText(pc as any);
+      const clearColor = isTetris ? t.warn : pc.tspin ? t.accent : t.text;
+      const clearY = boardY + bh - pc.lines - 2; // just above cleared rows
+      const textSize = isTetris || pc.tspin ? 'big' : 'small';
+      this.fx.spawnBigText(clearLabel, clearColor as RGB, -1, clearY, textSize as 'big' | 'small', true, 1);
+      // Attack amount popup (small, below the clear label)
+      if (pc.attack > 0) {
+        const atkText = `+${pc.attack}`;
+        const atkColor: RGB = pc.attack >= 4 ? [255, 100, 100] : [255, 200, 100];
+        this.fx.spawnPopup(atkText, atkColor, -1, clearY + (textSize === 'big' ? 4 : 3), true, 1);
+      }
+    }
+    if (this._pendingAllClear) {
+      this._pendingAllClear = false;
+      this.fx.spawnAllClear(boardX, boardY, bw);
+    }
+
+    // Combo zone: left of board (TETR.IO style — big number on the side)
+    const comboZoneX = boardX - 10;
+    if (s.combo > 1) {
+      this.fx.spawnComboZone(s.combo - 1, [t.warn[0], t.warn[1], t.warn[2]] as RGB, comboZoneX, boardY + bh - 8);
+    }
+    // B2B zone: below combo
+    if (s.btb > 1) {
+      this.fx.spawnB2BZone(s.btb - 1, [t.accent[0], t.accent[1], t.accent[2]] as RGB, comboZoneX, boardY + bh - 3);
+    }
+
+    // Render all EffectManager overlays
+    this.fx.render(buf, boardX, boardY, bw, bh);
 
     // opponents (right of NEXT)
     let ox = nextX + panelW + 2;
@@ -229,14 +307,29 @@ export class GameScreen implements Screen {
       ox += 13;
     }
 
-    // effects overlay (floating text)
-    let ey = boardY + 8;
+    // Legacy effects overlay — positioned near the board, rising and fading
     for (const e of this.effects) {
       if (!e.text) continue;
       const age = this.frame - e.frame;
+      if (age > 40) continue; // old effects fade completely
+      const fadeT = Math.max(0, 1 - age / 40);
+      const drift = Math.floor(age / 8);
       const color = e.kind === 'allclear' ? t.good : e.kind === 'attack' ? t.accent : t.warn;
-      center(buf, ey, e.text + (e.amount ? ` +${e.amount}` : ''), { fg: color, bold: true });
-      ey += 1;
+      const dimColor: RGB = [
+        Math.round(color[0] * fadeT),
+        Math.round(color[1] * fadeT),
+        Math.round(color[2] * fadeT),
+      ];
+      // Position: attack popups appear on the right side of the board
+      const popY = boardY + 4 - drift;
+      if (popY >= 0 && popY < buf.height) {
+        if (e.kind === 'attack') {
+          // Right side of board
+          const tx = boardX + bw * 2 + 3;
+          buf.drawText(tx, popY, e.text + (e.amount ? ` +${e.amount}` : ''), { fg: dimColor, bold: true });
+        }
+        // lineclear/allclear text is handled by EffectManager now
+      }
     }
 
     center(buf, buf.height - 2, 'esc forfeit', _s.faintS);

@@ -32,6 +32,7 @@ import {
   type GameAction,
   type IrsMode,
 } from '../../config/store.js';
+import { PIECE_STYLE_KEYS } from '../pieceStyles.js';
 
 // ---------------------------------------------------------------------------
 // row model
@@ -461,9 +462,16 @@ export function createVideoScreen(opts: ConfigScreenFactoryOpts): Screen {
       set: (v) => set({ targetFps: v as number }),
       format: (v) => `${v} FPS`,
     },
+    {
+      kind: 'cycle', label: 'PIECE STYLE', hint: 'how pieces are rendered on the board',
+      options: PIECE_STYLE_KEYS,
+      get: () => store.video.pieceStyle,
+      set: (v) => set({ pieceStyle: v as string }),
+      format: (v) => String(v).toUpperCase(),
+    },
     { kind: 'header', label: '' },
     {
-      kind: 'action', label: 'RESET TO DEFAULTS', hint: 'effects on · truecolor · 60 fps', danger: true,
+      kind: 'action', label: 'RESET TO DEFAULTS', hint: 'effects on · truecolor · 60 fps · bevel', danger: true,
       run: () => { store.resetSection('video'); opts.onChange?.(store.get(), 'video'); },
     },
   ];

@@ -6,6 +6,7 @@ import { LoginScreen, type LoginResult } from './tui/screens/login.js';
 import { TetrioSession } from './net/session.js';
 import { TetrioApp } from './tui/main.js';
 import { setTheme, getThemeKey } from './tui/themes.js';
+import { setPieceStyle } from './tui/pieceStyles.js';
 
 const HELP = `tetrio-tui — a terminal TETR.IO client
 
@@ -29,6 +30,14 @@ async function main(): Promise<void> {
     const envTheme = process.env.TETRIO_THEME;
     const chosen = cliTheme ?? envTheme;
     if (chosen) setTheme(chosen);
+  }
+  // Load piece style: CLI --piece-style > env TETRIO_PIECE_STYLE.
+  {
+    const styleArg = args.indexOf('--piece-style');
+    const cliStyle = styleArg >= 0 ? args[styleArg + 1] : undefined;
+    const envStyle = process.env.TETRIO_PIECE_STYLE;
+    const chosen = cliStyle ?? envStyle;
+    if (chosen) setPieceStyle(chosen);
   }
   const session = new TetrioSession();
   const tetrioApp = new TetrioApp(app, session);

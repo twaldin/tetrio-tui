@@ -16,6 +16,7 @@ import { createChannelScreen } from './screens/channel.js';
 import { ConfigStore } from '../config/store.js';
 import { createConfigMenuNode } from './screens/config.js';
 import { setTheme } from './themes.js';
+import { setPieceStyle } from './pieceStyles.js';
 import type { GameOptions } from '../types.js';
 
 export class TetrioApp {
@@ -36,6 +37,7 @@ export class TetrioApp {
     this.gameconn = new GameConnection(session);
     this.wireGame();
     this.setupDebugDump();
+    this.applyConfig();
     session.on('room.join', (d: any) => { this.lastRoomEvent = `join ack: ${JSON.stringify(d).slice(0, 80)}`; });
     session.on('room.update', (d: any) => { this.lastRoomEvent = `update: ${d?.name} ${d?.state}`; });
     session.on('server.migrate', (d: any) => { this.lastRoomEvent = `migrate ${d?.endpoint}`; });
@@ -143,10 +145,11 @@ export class TetrioApp {
     });
   }
 
-  /** Apply the persisted config (theme, handling, keybinds) to the running app. */
+  /** Apply the persisted config (theme, handling, keybinds, piece style) to the running app. */
   private applyConfig(): void {
     const cfg = this.configStore.get();
     if (cfg.video?.theme) setTheme(cfg.video.theme);
+    if (cfg.video?.pieceStyle) setPieceStyle(cfg.video.pieceStyle);
     this.app.requestRender();
   }
 

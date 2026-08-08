@@ -1,7 +1,8 @@
-/** Shared drawing helpers — themed, one-tone pieces with inner bevel. */
+/** Shared drawing helpers — themed pieces with pluggable piece-style system. */
 import type { BoardGrid, Cell, PieceType } from '../types.js';
 import type { RenderBuffer, Style, RGB } from './app.js';
 import { theme, type Theme } from './themes.js';
+import { pieceStyleDef } from './pieceStyles.js';
 
 // ---------------------------------------------------------------------------
 // Re-export a THEME proxy so existing `import { THEME } from './draw.js'`
@@ -44,42 +45,19 @@ export function pieceStyle(type: string, ghost = false): Style {
 }
 
 // ---------------------------------------------------------------------------
-// Board rendering — one-tone minoes with inner bevel
+// Board rendering — uses the active piece style from pieceStyles.ts
 // ---------------------------------------------------------------------------
 
-/**
- * Draw a single mino (2 chars wide) at pixel position (px, py).
- * One-tone: both cells use the same base color as BG, with a
- * subtle inner corner/bevel rendered via block-drawing characters.
- *
- * The left cell gets a slightly brighter top-left corner feel (▐ with
- * tint fg on base bg), the right cell gets a slightly darker bottom-right
- * (▌ with shade fg on base bg). This reads as a clean bevel without the
- * jarring 2-tone split.
- */
-/** Pre-computed board styles: piece mino left/right, ghost, empties, panel bg. */
+/** Pre-computed board styles: empties + panel bg (mino rendering delegated to pieceStyles). */
 let _bc: {
-  ml: Record<string, Style>; mr: Record<string, Style>;
-  gl: Style; gr: Style; ea: Style; eb: Style; pb: Style;
+  ea: Style; eb: Style; pb: Style;
   _t: Theme;
 } | null = null;
 function bc(): NonNullable<typeof _bc> {
   const t = theme();
   if (_bc && _bc._t === t) return _bc;
-  const p = t.pieces;
-  const keys = ['i','o','t','s','z','l','j','g'] as const;
-  const ml: Record<string, Style> = {};
-  const mr: Record<string, Style> = {};
-  for (const k of keys) { ml[k] = { fg: tint(p[k], 0.25), bg: p[k] }; mr[k] = { fg: shade(p[k], 0.72), bg: p[k] }; }
-  const gc = p.ghost, gs5 = shade(gc, 0.5);
-  _bc = { ml, mr, gl: { fg: tint(gc, 0.3), bg: gs5 }, gr: { fg: shade(gc, 0.3), bg: gs5 },
-    ea: { bg: t.boardA }, eb: { bg: t.boardB }, pb: { bg: t.panel }, _t: t };
+  _bc = { ea: { bg: t.boardA }, eb: { bg: t.boardB }, pb: { bg: t.panel }, _t: t };
   return _bc;
-}
-
-function drawMino(buf: RenderBuffer, px: number, py: number, c: RGB): void {
-  buf.set(px, py, '▐', { fg: tint(c, 0.25), bg: c });
-  buf.set(px + 1, py, '▌', { fg: shade(c, 0.72), bg: c });
 }
 
 /** Draw the playfield with a checkerboard grid. Each mino = 2 chars wide. */
@@ -94,17 +72,16 @@ export function drawBoard(
   const w = grid[0]?.length ?? 10;
   const gs = opts.ghostSet;
   const c = bc();
+  const style = pieceStyleDef();
   for (let row = 0; row < h; row++) {
     for (let col = 0; col < w; col++) {
       const cell = grid[row][col];
       const px = x + col * 2;
       const py = y + row;
       if (cell) {
-        buf.set(px, py, '▐', c.ml[cell] ?? c.ml.g);
-        buf.set(px + 1, py, '▌', c.mr[cell] ?? c.mr.g);
+        style.drawMino(buf, px, py, cell);
       } else if (gs && gs.has(row * 256 + col)) {
-        buf.set(px, py, '▐', c.gl);
-        buf.set(px + 1, py, '▌', c.gr);
+        style.drawGhost(buf, px, py);
       } else {
         const s = (row + col) % 2 === 0 ? c.ea : c.eb;
         buf.set(px, py, ' ', s);
@@ -136,16 +113,14 @@ export function drawPiecePreview(buf: RenderBuffer, x: number, y: number, type: 
   if (!type) return;
   const shape = PIECE_SHAPES[type];
   if (!shape) return;
-  const ml = cc.ml[type] ?? cc.ml.g;
-  const mr = cc.mr[type] ?? cc.mr.g;
+  const style = pieceStyleDef();
   const rows = shape.length, cols = shape[0].length;
   const ox = Math.max(0, Math.floor((8 - cols * 2) / 2));
   const oy = Math.max(0, Math.floor((4 - rows) / 2));
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (shape[r][c]) {
-        buf.set(x + ox + c * 2, y + oy + r, '▐', ml);
-        buf.set(x + ox + c * 2 + 1, y + oy + r, '▌', mr);
+        style.drawMino(buf, x + ox + c * 2, y + oy + r, type);
       }
     }
   }
@@ -170,8 +145,8 @@ export function drawBox(buf: RenderBuffer, x: number, y: number, w: number, h: n
 export function drawBoardBorder(buf: RenderBuffer, x: number, y: number, w: number, h: number, style?: Style): void {
   const t = theme();
   const s = style ?? { fg: t.borderBright };
-  buf.set(x, y, '╭', s); buf.set(x + w - 1, y, '╮', s);
-  buf.set(x, y + h - 1, '╰', s); buf.set(x + w - 1, y + h - 1, '╯', s);
+  buf.set(x, y, '┏', s); buf.set(x + w - 1, y, '┓', s);
+  buf.set(x, y + h - 1, '┗', s); buf.set(x + w - 1, y + h - 1, '┛', s);
   for (let i = 1; i < w - 1; i++) { buf.set(x + i, y, '━', s); buf.set(x + i, y + h - 1, '━', s); }
   for (let i = 1; i < h - 1; i++) { buf.set(x, y + i, '┃', s); buf.set(x + w - 1, y + i, '┃', s); }
 }

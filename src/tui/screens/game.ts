@@ -287,9 +287,10 @@ export class GameScreen implements Screen {
         frame: this.frame,
       };
       // Attack counter: the number of lines sent to the enemy — the ONLY big diagonal ASCII.
+      // It appears on the right and drifts down-left as it fades (matching the real game).
       if (pc.attack >= 1 && this.ctrl.result === 'playing') {
         const atkColor: RGB = pc.attack >= 4 ? [255, 100, 100] : [255, 200, 100];
-        this.fx.spawnBigText(`+${pc.attack}`, atkColor, boardX + bw * 2 + panelW + 6, boardY + bh - 7, 'big', true, 0, true);
+        this.fx.spawnBigText(`+${pc.attack}`, atkColor, boardX + bw * 2 + panelW + 8, boardY + bh - 8, 'big', true, 0, true, -1, 1);
       }
     }
     if (this._pendingAllClear) {

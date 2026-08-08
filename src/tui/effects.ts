@@ -138,6 +138,10 @@ interface BigTextEffect {
   flash: boolean;
   /** Diagonal (staircase) slant, like the real game's tilted action text */
   diagonal?: boolean;
+  /** Horizontal drift per frame (negative = leftward, like the real spike counter drifting down-left) */
+  dx?: number;
+  /** Vertical drift per frame (positive = down, like the spike counter) */
+  dy?: number;
 }
 
 interface ComboZoneEffect {
@@ -288,6 +292,8 @@ export class EffectManager {
     flash = true,
     riseSpeed = 1,
     diagonal = false,
+    dx = 0,
+    dy = 0,
   ): void {
     if (_animIntensity === 0) return;
     // ONE big text at a time — a new popup immediately replaces any existing one
@@ -296,7 +302,7 @@ export class EffectManager {
     const life = Math.max(1, Math.round(26 * _animIntensity / 100)); // faster fade than before
     this.effects.push({
       kind: 'bigText', age: 0, life, text, color,
-      absX, startY, size, riseSpeed, flash, diagonal,
+      absX, startY, size, riseSpeed, flash, diagonal, dx, dy,
     });
   }
 
@@ -597,9 +603,10 @@ export class EffectManager {
 
   private _renderBigText(buf: RenderBuffer, e: BigTextEffect, bx: number, by: number, boardW: number): void {
     const { age, life, text, size, flash, riseSpeed, diagonal } = e;
-    // Rise
+    // Rise + optional horizontal/vertical drift (the spike counter drifts down-left)
     const drift = Math.floor(age * riseSpeed / 10);
-    const py = e.startY - drift;
+    const px = e.absX + Math.floor(age * (e.dx ?? 0) / 8);
+    const py = e.startY - drift + Math.floor(age * (e.dy ?? 0) / 8);
     if (py < 0 || py + 3 >= buf.height) return;
 
     // Fade — stay bright ~62% then fade out quickly
@@ -623,7 +630,7 @@ export class EffectManager {
       const boardCenterX = bx + Math.floor(boardW * 2 / 2);
       renderBigTextCentered(buf, boardCenterX, py, text, style, size, diagonal);
     } else {
-      renderBigText(buf, e.absX, py, text, style, size, diagonal);
+      renderBigText(buf, px, py, text, style, size, diagonal);
     }
   }
 

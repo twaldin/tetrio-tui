@@ -500,8 +500,8 @@ export class EffectManager {
       const flashIntensity = 1 - (age / 3);
       const white: RGB = [255, 255, 255];
       const flashColor = isTetris
-        ? lerpRGB(brightenRGB(color, 1.5), white, flashIntensity * 0.8)
-        : lerpRGB(color, white, flashIntensity * 0.7);
+        ? lerpRGB(brightenRGB(color, 1.6), white, 0.5 + flashIntensity * 0.5)
+        : lerpRGB(color, white, 0.35 + flashIntensity * 0.65);
 
       for (const row of rows) {
         const py = by + row;
@@ -543,10 +543,10 @@ export class EffectManager {
             }
           } else {
             // Not yet swept — dimming residue
-            const fadeFactor = Math.max(0.1, 0.4 - sweepFrame * 0.06);
+            const fadeFactor = Math.max(0.05, 0.22 - sweepFrame * 0.05);
             const fadeColor = dimRGB(color, fadeFactor);
-            buf.set(px, py, '▒', { fg: fadeColor });
-            buf.set(px + 1, py, '▒', { fg: fadeColor });
+            buf.set(px, py, '░', { fg: fadeColor });
+            buf.set(px + 1, py, '░', { fg: fadeColor });
           }
         }
       }

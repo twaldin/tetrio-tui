@@ -7,6 +7,11 @@ import path from 'node:path';
 import { test, expect } from 'vitest';
 import { launchTerminal, type Session } from 'tuistory';
 
+// pty tests need a real terminal model + spare CPU; headless CI workers OOM/crash on
+// them (vitest worker exits). Run locally or with PTY_TESTS=1.
+const PTY = process.env.CI !== 'true' || process.env.PTY_TESTS === '1';
+const ptyTest = PTY ? test : test.skip;
+
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 function launch(): Promise<Session> {
@@ -31,7 +36,7 @@ async function intoSolo(term: Session, mode: '40l' | 'blitz' | 'zen' | 'practice
   await term.waitIdle({ timeout: 1000 }).catch(() => {});
 }
 
-test('40 LINES: HUD, pieces drop, retry restarts, esc exits to menu', async () => {
+ptyTest('40 LINES: HUD, pieces drop, retry restarts, esc exits to menu', async () => {
   const term = await launch();
   try {
     await intoSolo(term, '40l');
@@ -66,7 +71,7 @@ test('40 LINES: HUD, pieces drop, retry restarts, esc exits to menu', async () =
   }
 });
 
-test('BLITZ: SCORE HUD + 2:00 countdown, scoring on drops', async () => {
+ptyTest('BLITZ: SCORE HUD + 2:00 countdown, scoring on drops', async () => {
   const term = await launch();
   try {
     await intoSolo(term, 'blitz');
@@ -88,7 +93,7 @@ test('BLITZ: SCORE HUD + 2:00 countdown, scoring on drops', async () => {
   }
 });
 
-test('ZEN + PRACTICE: launch and play', async () => {
+ptyTest('ZEN + PRACTICE: launch and play', async () => {
   for (const mode of ['zen', 'practice'] as const) {
     const term = await launch();
     try {
@@ -106,7 +111,7 @@ test('ZEN + PRACTICE: launch and play', async () => {
   }
 });
 
-test('config round-trip: VIDEO shows THEME/BORDER STYLE/MINIMAL and escapes cleanly', async () => {
+ptyTest('config round-trip: VIDEO shows THEME/BORDER STYLE/MINIMAL and escapes cleanly', async () => {
   const term = await launch();
   try {
     await term.waitForText('MULTIPLAYER', { timeout: 20000 });

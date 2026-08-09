@@ -95,11 +95,14 @@ export class GameScreen implements Screen {
     if (ev.type !== 'down') return;
     const key = this.keymap[ev.key] ?? this.keymap[ev.sequence ?? ''];
     if (!key) return;
-    if (key === 'reset') { this.ctrl.restart(); return; } // retry: restart the game
+    if (key === 'reset') { this.pendingTaps.length = 0; this.ctrl.restart(); return; } // retry: restart the game
     if (ACTION_KEYS.has(key)) {
-      // TAP: fire immediately, release next tick (terminals don't send key-up reliably)
-      this.ctrl.setKey(key, true);
-      this.queueTapRelease(key);
+      // TAP: queue one press per keydown. Each queued press becomes a clean ONE-TICK PULSE on a
+      // future engine tick (see tickWithTaps), so rapid presses each register as a fresh press
+      // edge. (Setting the key directly here kept the key pinned true across rapid presses —
+      // the engine's press-edge detection (`input.x && !prevInput.x`) then never saw a new edge
+      // and swallowed every press after the first.)
+      this.pendingTaps.push(key);
     } else {
       // HOLD: press now; keep alive while key repeats, release after a short idle timeout
       this.ctrl.setKey(key, true);
@@ -108,14 +111,36 @@ export class GameScreen implements Screen {
   }
 
   private holdTimers = new Map<string, number>();
-  private tapQueue = new Set<string>();
-  private queueTapRelease(key: string): void { this.tapQueue.add(key); }
+  /** FIFO of queued tap presses (duplicates = multiple presses). Drained one pulse per tick. */
+  private pendingTaps: string[] = [];
+  /** The tap key pulsed on the immediately previous engine tick (null = any key may fire). */
+  private prevPulseKey: string | null = null;
   private static readonly HOLD_RELEASE_MS = 120;
 
+  /**
+   * Advance the engine one tick, firing at most one queued tap as a true ONE-TICK PULSE:
+   * the key is set true for exactly this tick, then released immediately after, so the
+   * engine's press-edge detection (`input.x && !prevInput.x`) sees a fresh edge for every
+   * queued press and `prevInput` resets on the following tick.
+   *
+   * A key that was pulsed on the previous tick is skipped for one tick (its release must be
+   * seen by the engine before it can edge again) — a different queued key may fire instead,
+   * preserving press order. Max sustained rate per key is 30 presses/sec at 60fps.
+   */
+  private tickWithTaps(): ReturnType<LocalGameController['tick']> {
+    const idx = this.pendingTaps.findIndex((k) => k !== this.prevPulseKey);
+    let key: string | null = null;
+    if (idx !== -1) {
+      key = this.pendingTaps.splice(idx, 1)[0];
+      this.ctrl.setKey(key, true);
+    }
+    const events = this.ctrl.tick();
+    if (key !== null) this.ctrl.setKey(key, false);
+    this.prevPulseKey = key;
+    return events;
+  }
+
   private pumpInput(): void {
-    // release taps after one tick
-    for (const key of this.tapQueue) { this.ctrl.setKey(key, false); }
-    this.tapQueue.clear();
     // release held keys that stopped repeating
     const now = Date.now();
     for (const [key, t] of this.holdTimers) {
@@ -137,11 +162,11 @@ export class GameScreen implements Screen {
     let ticked = false;
     while (this._tickAcc >= TICK_MS && guard++ < 8) {
       this._tickAcc -= TICK_MS;
-      const e = this.ctrl.tick();
+      const e = this.tickWithTaps();
       if (e) events = e;
       ticked = true;
     }
-    // only release tap/held keys once the engine has actually processed them (a tick) —
+    // only release held keys once the engine has actually processed them (a tick) —
     // otherwise a fast press could be released before the engine ever saw it
     if (ticked) this.pumpInput();
     this.opponents.tickAll();

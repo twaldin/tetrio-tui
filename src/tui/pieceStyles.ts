@@ -11,6 +11,13 @@
  *  - flat    — pure solid ██. Cleanest modern look.
  *  - outline — solid fill with dark separator line between rows.
  *  - gradient — more dramatic vertical gradient (top bright → bottom dark).
+ *  - halfblock — half-height minoes (▄ on board-colored top half): every piece
+ *                row occupies only the bottom half of its terminal row, so a
+ *                2-row piece reads ~1 terminal row shorter (tetro-tui's ▀▄█
+ *                vertical-compression trick, adapted to per-mino rendering).
+ *  - shiny   — glossy "guideline" look via fg/bg inversion: a light-shade Γ
+ *                corner glyph on a solid piece-color background (tetro-tui's
+ *                `Γ ` shiny-blocks preset).
  */
 import type { RenderBuffer, Style, RGB } from './app.js';
 import { theme, type Theme } from './themes.js';

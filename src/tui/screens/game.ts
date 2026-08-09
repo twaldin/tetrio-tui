@@ -282,14 +282,29 @@ export class GameScreen implements Screen {
     const sx2 = startX;
     const solo = !this.isVersus;
     if (solo) {
-      buf.drawText(sx2, boardY + 15, 'PIECES', _s.dimS);
-      buf.drawText(sx2 + 8, boardY + 15, `${st.piecesplaced}`, _s.textBold);
-      buf.drawText(sx2, boardY + 16, 'LINES', _s.dimS);
-      buf.drawText(sx2 + 8, boardY + 16, `${st.lines}/40`, _s.textBold);
-      buf.drawText(sx2, boardY + 17, 'TIME', _s.dimS);
-      buf.drawText(sx2 + 8, boardY + 17, formatTime(secs), _s.textBold);
-      buf.drawText(sx2, boardY + 18, 'PPS', _s.dimS);
-      buf.drawText(sx2 + 8, boardY + 18, st.pps.toFixed(2), _s.textBold);
+      const isBlitz = this.modeLabel === 'BLITZ';
+      if (isBlitz) {
+        // Blitz HUD: SCORE is the point of the mode; TIME counts DOWN from the objective.
+        buf.drawText(sx2, boardY + 15, 'SCORE', _s.dimS);
+        buf.drawText(sx2 + 8, boardY + 15, `${st.score}`, _s.textBold);
+        buf.drawText(sx2, boardY + 16, 'LINES', _s.dimS);
+        buf.drawText(sx2 + 8, boardY + 16, `${st.lines}`, _s.textBold);
+        const obj = this.ctrl.objective;
+        const remain = obj && obj.type === 'time' ? Math.max(0, obj.seconds - secs) : secs;
+        buf.drawText(sx2, boardY + 17, 'TIME', _s.dimS);
+        buf.drawText(sx2 + 8, boardY + 17, formatTime(remain), _s.textBold);
+        buf.drawText(sx2, boardY + 18, 'PPS', _s.dimS);
+        buf.drawText(sx2 + 8, boardY + 18, st.pps.toFixed(2), _s.textBold);
+      } else {
+        buf.drawText(sx2, boardY + 15, 'PIECES', _s.dimS);
+        buf.drawText(sx2 + 8, boardY + 15, `${st.piecesplaced}`, _s.textBold);
+        buf.drawText(sx2, boardY + 16, 'LINES', _s.dimS);
+        buf.drawText(sx2 + 8, boardY + 16, `${st.lines}/40`, _s.textBold);
+        buf.drawText(sx2, boardY + 17, 'TIME', _s.dimS);
+        buf.drawText(sx2 + 8, boardY + 17, formatTime(secs), _s.textBold);
+        buf.drawText(sx2, boardY + 18, 'PPS', _s.dimS);
+        buf.drawText(sx2 + 8, boardY + 18, st.pps.toFixed(2), _s.textBold);
+      }
       // persistent B2B indicator — always show the current back-to-back chain (TETR.IO style)
       if (st.btb > 0 && this.ctrl.result === 'playing') {
         renderBigText(buf, sx2, boardY + 20, `x${st.btb}`, { fg: t.warn, bold: true }, 'block');
@@ -462,21 +477,32 @@ export class GameScreen implements Screen {
       buf.fillRect(scrimX, scrimY, scrimW, scrimH, ' ', { bg: t.bg });
       if (buf.drawBox) buf.drawBox(scrimX, scrimY, scrimW, scrimH, { fg: t.borderSubtle });
       if (result === 'win') {
-        renderBigTextCentered(buf, gcx, cy - 2, 'CLEAR', { fg: t.good, bold: true }, 'banner');
+        const isBlitz = this.modeLabel === 'BLITZ';
+        renderBigTextCentered(buf, gcx, cy - 2, isBlitz ? 'TIME UP' : 'CLEAR', { fg: t.good, bold: true }, 'banner');
         const tsec = this.ctrl.finalTime / 60;
-        // RESULTS table (real TETR.IO shows one after a sprint)
+        // RESULTS table (real TETR.IO shows one after a sprint/blitz)
         const rs = s.stats;
         const ry = cy + 6;
         const row = (dy: number, k: string, v: string) => {
           buf.drawText(gcx - 11, ry + dy, k, { fg: t.dim });
           buf.drawText(gcx + 3, ry + dy, v, { fg: t.text, bold: true });
         };
-        row(0, 'PIECES', `${rs.piecesplaced}`);
-        row(1, 'LINES', `${rs.lines}/40`);
-        row(2, 'TIME', `${tsec.toFixed(2)}s`);
-        row(3, 'PPS', rs.pps.toFixed(2));
-        row(4, 'MAX COMBO', `${rs.combomax}`);
-        row(5, 'MAX B2B', `${rs.btbmax}`);
+        if (isBlitz) {
+          // Blitz is scored — show the score first (real TETR.IO does)
+          row(0, 'SCORE', `${rs.score}`);
+          row(1, 'LINES', `${rs.lines}`);
+          row(2, 'PIECES', `${rs.piecesplaced}`);
+          row(3, 'PPS', rs.pps.toFixed(2));
+          row(4, 'MAX COMBO', `${rs.combomax}`);
+          row(5, 'MAX B2B', `${rs.btbmax}`);
+        } else {
+          row(0, 'PIECES', `${rs.piecesplaced}`);
+          row(1, 'LINES', `${rs.lines}/40`);
+          row(2, 'TIME', `${tsec.toFixed(2)}s`);
+          row(3, 'PPS', rs.pps.toFixed(2));
+          row(4, 'MAX COMBO', `${rs.combomax}`);
+          row(5, 'MAX B2B', `${rs.btbmax}`);
+        }
         center(buf, ry + 7, 'esc back', _s.dimS);
       } else {
         renderBigTextCentered(buf, gcx, cy, 'TOP OUT', { fg: t.bad, bold: true }, 'banner');

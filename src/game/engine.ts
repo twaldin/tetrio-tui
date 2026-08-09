@@ -81,6 +81,22 @@ export function computeComboAttack(combo: number): number {
   return d;
 }
 
+// ---- Score table (EXACT TETR.IO, docs/tetrio_constants.json#scoring) ----
+// b2b: difficult actions x1.5 while the chain lives; combo: 50*(combo-1);
+// all-clear +3500; softdrop 1/cell, harddrop 2/cell; everything x level at the end.
+export const SCORE_TABLE = {
+  single: 100, double: 300, triple: 500, tetris: 800, penta: 1200,
+  tspin_mini: 100, tspin: 400,
+  tspin_mini_single: 200, tspin_single: 800,
+  tspin_mini_double: 400, tspin_double: 1200,
+  tspin_mini_triple: 800, tspin_triple: 1600,
+  b2b_multiplier: 1.5,
+  combo: 50,
+  allclear: 3500,
+  softdrop: 1,
+  harddrop: 2,
+};
+
 export interface ClearResult {
   clearedRows?: number[];  // visible-board row indices that were cleared (for effects)
   kind: 'none' | 'single' | 'double' | 'triple' | 'tetris';
@@ -342,6 +358,18 @@ function clearLines(engine: Engine, placed: FallingPiece): ClearResult {
   engine.stats.lines += lines;
   engine.stats.garbage.attack += attack;
   engine.stats.garbage.sent += attack;
+
+  // --- score (EXACT TETR.IO: base [x1.5 b2b] + 50*(combo-1) [+3500 AC], all x level) ---
+  if (lines > 0 || tspin !== 'none') {
+    let base: number;
+    if (tspin === 'full') base = [SCORE_TABLE.tspin, SCORE_TABLE.tspin_single, SCORE_TABLE.tspin_double, SCORE_TABLE.tspin_triple][lines] ?? 0;
+    else if (tspin === 'mini') base = [SCORE_TABLE.tspin_mini, SCORE_TABLE.tspin_mini_single, SCORE_TABLE.tspin_mini_double, SCORE_TABLE.tspin_mini_triple][lines] ?? 0;
+    else base = [SCORE_TABLE.single, SCORE_TABLE.double, SCORE_TABLE.triple, SCORE_TABLE.tetris][lines - 1] ?? 0;
+    if (engine.btb > 1 && difficult) base *= SCORE_TABLE.b2b_multiplier;
+    let gain = base + SCORE_TABLE.combo * Math.max(0, engine.combo - 1);
+    if (allclear) gain += SCORE_TABLE.allclear;
+    engine.stats.score += Math.round(gain * engine.stats.level);
+  }
   return { kind, tspin, lines, allclear, attack, b2b: engine.btb, combo: engine.combo, clearedRows: clearedVisibleRows };
 }
 
@@ -435,6 +463,8 @@ export function tick(engine: Engine, input: InputState): TickEvents {
 
   // --- hard drop (on press edge) ---
   if (input.hardDrop && !engine.prevInput.hardDrop && (opts.allow_harddrop ?? true)) {
+    const hdDist = ghostY(board, f.type, f.x, f.y, f.r) - f.y;
+    if (hdDist > 0) engine.stats.score += Math.round(hdDist * SCORE_TABLE.harddrop * engine.stats.level);
     f.y = ghostY(board, f.type, f.x, f.y, f.r);
     events.harddrop = true;
     const lockEv = lockPiece(engine);
@@ -541,7 +571,9 @@ function applyGravity(engine: Engine, gravity: number, soft: boolean): void {
   const board = engine.state.board;
   if (gravity === Infinity) {
     // 20G soft drop: fall to ghost instantly but don't lock
-    f.y = ghostY(board, f.type, f.x, f.y, f.r);
+    const ny = ghostY(board, f.type, f.x, f.y, f.r);
+    if (soft && ny > f.y) engine.stats.score += Math.round((ny - f.y) * SCORE_TABLE.softdrop * engine.stats.level);
+    f.y = ny;
     return;
   }
   engine.gravityRemainder += gravity;
@@ -550,6 +582,7 @@ function applyGravity(engine: Engine, gravity: number, soft: boolean): void {
   while (steps > 0) {
     if (!collides(board, f.type, f.x, f.y + 1, f.r)) {
       f.y += 1;
+      if (soft) engine.stats.score += Math.round(SCORE_TABLE.softdrop * engine.stats.level);
       steps--;
     } else {
       break;

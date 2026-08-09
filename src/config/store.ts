@@ -63,10 +63,12 @@ export type KeyBinds = Record<GameAction, string[]>;
 
 export interface VideoConfig {
   effects: boolean;       // board shake / clear flashes / popups
+  minimal: boolean;       // minimal mode: plain text, no shake/particles/sweep/big-font
   colorMode: ColorMode;
   targetFps: number;
   theme: string;          // the color theme key (tetrio, catppuccin, ...)
-  pieceStyle: string;     // piece rendering style (bevel, flat, outline, gradient)
+  pieceStyle: string;     // piece rendering style (bevel, flat, outline, gradient, halfblock, shiny)
+  borderStyle: string;    // panel/board border style (rounded, double, single, heavy, none)
 }
 
 export interface AudioConfig {
@@ -132,7 +134,7 @@ export function defaultConfig(): Config {
     version: CONFIG_VERSION,
     handling: defaultHandling(),
     keybinds: defaultKeybinds(),
-    video: { effects: true, colorMode: 'truecolor', targetFps: 60, theme: 'tetrio', pieceStyle: 'bevel' },
+    video: { effects: true, minimal: false, colorMode: 'truecolor', targetFps: 60, theme: 'tetrio', pieceStyle: 'bevel', borderStyle: 'rounded' },
     audio: { music: 100, sfx: 100 },
     account: { lastUsername: '' },
   };
@@ -316,12 +318,14 @@ export function sanitizeVideo(input: unknown): VideoConfig {
   const o = isObj(input) ? input : {};
   return {
     effects: asBool(o.effects, d.effects),
+    minimal: asBool(o.minimal, d.minimal),
     colorMode: asOneOf(o.colorMode, COLOR_MODES, d.colorMode),
     targetFps: TARGET_FPS_OPTIONS.includes(o.targetFps as number)
       ? (o.targetFps as number)
       : Math.round(clampNum(o.targetFps, 15, 240, d.targetFps)),
     theme: typeof o.theme === 'string' ? o.theme : d.theme,
     pieceStyle: typeof o.pieceStyle === 'string' ? o.pieceStyle : d.pieceStyle,
+    borderStyle: typeof o.borderStyle === 'string' ? o.borderStyle : d.borderStyle,
   };
 }
 

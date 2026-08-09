@@ -40,8 +40,8 @@ export class LocalGameController extends EventEmitter {
   private fullInterval = 600;   // send a full snapshot every N frames
   private heartbeatInterval = 50; // send a (possibly empty) batch every N frames
   private keyState: InputState = { ...NEUTRAL_INPUT };
-  /** Optional sprint objective (e.g. clear N lines to win). */
-  objective: { type: 'lines'; count: number } | null = null;
+  /** Optional objective: clear N lines (40L) or survive N seconds (Blitz). */
+  objective: { type: 'lines'; count: number } | { type: 'time'; seconds: number } | null = null;
   /** 'playing' | 'win' (objective met) | 'topout'. */
   result: 'playing' | 'win' | 'topout' = 'playing';
   /** Final time in frames when the game ended (60 fps). */
@@ -50,9 +50,9 @@ export class LocalGameController extends EventEmitter {
   constructor() { super(); }
 
   /** Start a new local game. gameid assigned by server (game.enter/game.start). */
-  private _startParams: { options: Partial<GameOptions>; seed?: number; objective?: { type: 'lines'; count: number } } | null = null;
+  private _startParams: { options: Partial<GameOptions>; seed?: number; objective?: { type: 'lines'; count: number } | { type: 'time'; seconds: number } } | null = null;
 
-  start(gameid: number, options: Partial<GameOptions>, seed?: number, objective?: { type: 'lines'; count: number }): void {
+  start(gameid: number, options: Partial<GameOptions>, seed?: number, objective?: { type: 'lines'; count: number } | { type: 'time'; seconds: number }): void {
     this._startParams = { options, seed, objective };
     this.gameid = gameid;
     this.engine = createGame(options, seed);
@@ -163,14 +163,19 @@ export class LocalGameController extends EventEmitter {
       this.emit('gameover', false);
       return events;
     }
-    // sprint objective: clear N lines to win
-    if (this.objective && this.objective.type === 'lines' && this.engine.stats.lines >= this.objective.count) {
-      this.playing = false;
-      this.result = 'win';
-      this.finalTime = this.engine.stats.currentTime;
-      this.flush(true);
-      this.emit('gameover', true);
-      return events;
+    // objective: clear N lines (40L) or survive N seconds (Blitz)
+    if (this.objective) {
+      const met = this.objective.type === 'lines'
+        ? this.engine.stats.lines >= this.objective.count
+        : this.engine.stats.currentTime >= this.objective.seconds * 60; // time in engine frames (60fps)
+      if (met) {
+        this.playing = false;
+        this.result = 'win';
+        this.finalTime = this.engine.stats.currentTime;
+        this.flush(true);
+        this.emit('gameover', true);
+        return events;
+      }
     }
 
     // periodic full snapshot

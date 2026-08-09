@@ -159,7 +159,8 @@ export class TetrioApp {
     const options: Partial<GameOptions> = soloOptionsFor(mode);
     // offline: no server — start immediately with our own gameid + seed
     const objective = mode === '40l' ? { type: 'lines' as const, count: 40 } : undefined;
-    ctrl.start(1, options, Math.floor(Math.random() * 0x7fffffff), objective);
+    const seed = process.env.TUI_SEED ? parseInt(process.env.TUI_SEED, 10) : Math.floor(Math.random() * 0x7fffffff);
+    ctrl.start(1, options, seed, objective);
     const label = { '40l': '40 LINES', blitz: 'BLITZ', zen: 'ZEN', practice: 'PRACTICE' }[mode] ?? mode.toUpperCase();
     const screen = new GameScreen({
       controller: ctrl, opponents: this.opponents, onExit: () => { ctrl.forfeit(); this.app.pop(); }, modeLabel: label, autoPlay: process.env.TUI_AUTOPLAY === '1' || process.argv.includes('--autoplay'),

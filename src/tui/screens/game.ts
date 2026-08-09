@@ -249,6 +249,12 @@ export class GameScreen implements Screen {
       buf.drawText(sx2 + 8, boardY + 17, formatTime(secs), _s.textBold);
       buf.drawText(sx2, boardY + 18, 'PPS', _s.dimS);
       buf.drawText(sx2 + 8, boardY + 18, st.pps.toFixed(2), _s.textBold);
+      // persistent B2B indicator — always show the current back-to-back chain (TETR.IO style)
+      if (st.btb > 0 && this.ctrl.result === 'playing') {
+        renderBigText(buf, sx2, boardY + 20, `x${st.btb}`, { fg: t.warn, bold: true }, 'block');
+        const bw2 = measureBigText(`x${st.btb}`, 'block').width;
+        buf.drawText(sx2 + bw2 + 1, boardY + 20 + 3, 'B2B', { fg: t.accent, bold: true });
+      }
     } else {
       buf.drawText(sx2, boardY + 15, 'APM', _s.dimS);
       buf.drawText(sx2 + 6, boardY + 15, st.apm.toFixed(0), _s.textBold);

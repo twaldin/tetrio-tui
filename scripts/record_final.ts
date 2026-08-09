@@ -42,7 +42,7 @@ async function main() {
       term.killProcess();
     }
   } else {
-    const term = await mkTerm({ TETRIO_THEME: 'tetrio', TUI_AUTOPLAY: '1' });
+    const term = await mkTerm({ TETRIO_THEME: 'tetrio', TUI_AUTOPLAY: '1', TUI_SEED: process.env.TUI_SEED ?? '42' });
     await term.waitForText('MULTIPLAYER', { timeout: 15000 });
     await term.press('down'); await term.press('enter');
     await term.waitForText('40 LINES', { timeout: 3000 }).catch(() => {});

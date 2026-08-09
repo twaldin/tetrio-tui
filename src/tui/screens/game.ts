@@ -329,7 +329,7 @@ export class GameScreen implements Screen {
 
     // TETR.IO-style action-text block on the LEFT of the board (T-SPIN prefix / clear type /
     // B2B / N COMBO), one at a time, fading out over ~1.5s.
-    if (this._action) {
+    if (this._action && this.ctrl.result === 'playing') {
       const a = this._action;
       const age = this.frame - a.frame;
       const LIFE = 50; // frames at the render rate

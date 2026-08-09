@@ -338,11 +338,15 @@ export class GameScreen implements Screen {
       } else {
         let color = a.color;
         if (age > LIFE * 0.6) color = dimRGB(color, 1 - ((age - LIFE * 0.6) / (LIFE * 0.4)) * 0.85);
-        const ax = startX; // left panel column, freed middle-left
+        // Anchor to the UNSHAKEN board left edge (boardX includes the shake offset sx, which would
+        // push the text off the left edge mid-shake). Unshaken board left = startX + panelW + 2.
+        const clearW = measureBigText(a.clearType, 'mini').width;
+        const unshakenBoardX = startX + panelW + 2;
+        const ax = Math.max(2, unshakenBoardX - clearW - 2);
         let ay = boardY + 7;
         if (a.prefix) { buf.drawText(ax, ay, a.prefix, { fg: t.accent, bold: true }); ay += 1; }
-        const clearH = a.size === 'big' ? 7 : 4;
-        renderBigText(buf, ax, ay, a.clearType, { fg: color, bold: true }, a.size);
+        const clearH = measureBigText(a.clearType, 'mini').height;
+        renderBigText(buf, ax, ay, a.clearType, { fg: color, bold: true }, 'mini'); // compact Figlet font, fits the left margin
         ay += clearH;
         if (a.b2b > 0) { buf.drawText(ax, ay, `B2B x${a.b2b}`, { fg: t.accent, bold: true }); ay += 1; }
         if (a.combo > 0) {
@@ -402,7 +406,7 @@ export class GameScreen implements Screen {
       buf.fillRect(scrimX, scrimY, scrimW, scrimH, ' ', { bg: t.bg });
       if (buf.drawBox) buf.drawBox(scrimX, scrimY, scrimW, scrimH, { fg: t.borderSubtle });
       if (result === 'win') {
-        renderBigTextCentered(buf, gcx, cy - 2, 'CLEAR', { fg: t.good, bold: true }, 'big');
+        renderBigTextCentered(buf, gcx, cy - 2, 'CLEAR', { fg: t.good, bold: true }, 'banner');
         const tsec = this.ctrl.finalTime / 60;
         // RESULTS table (real TETR.IO shows one after a sprint)
         const rs = s.stats;
@@ -419,7 +423,7 @@ export class GameScreen implements Screen {
         row(5, 'MAX B2B', `${rs.btbmax}`);
         center(buf, ry + 7, 'esc back', _s.dimS);
       } else {
-        renderBigTextCentered(buf, gcx, cy, 'TOP OUT', { fg: t.bad, bold: true }, 'big');
+        renderBigTextCentered(buf, gcx, cy, 'TOP OUT', { fg: t.bad, bold: true }, 'banner');
         center(buf, cy + 8, 'esc back', _s.dimS);
       }
     } else {

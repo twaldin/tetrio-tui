@@ -17,6 +17,7 @@ const HELP = `tetrio-tui — a terminal TETR.IO client
 
 usage: tetrio-tui [options]
   --guest [name]        play as a guest (skip login screen)
+  --offline             no network at all — straight to the home menu (solo play)
   --token <jwt>         log in with a session token
   --help                show this help
 `;
@@ -123,7 +124,10 @@ async function main(): Promise<void> {
   app.start();
   const guestIdx = args.indexOf('--guest');
   const tokenIdx = args.indexOf('--token');
-  if (tokenIdx >= 0) {
+  if (args.includes('--offline')) {
+    // fully offline: no login, no ribbon — solo modes are 100% local
+    tetrioApp.showHome();
+  } else if (tokenIdx >= 0) {
     doConnect({ method: 'token', token: args[tokenIdx + 1] });
   } else if (guestIdx >= 0) {
     doConnect({ method: 'anonymous', username: args[guestIdx + 1] && !args[guestIdx + 1].startsWith('--') ? args[guestIdx + 1] : undefined });

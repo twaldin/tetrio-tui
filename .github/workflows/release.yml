@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v1
+      - run: npm ci
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npm test
+      - run: npm run build
+
+      # Compile standalone binaries (no Node.js needed) for the main platforms.
+      - name: Build binaries
+        run: |
+          bun build dist/index.js --compile --target=bun-darwin-arm64 --outfile tetrio-tui-darwin-arm64
+          bun build dist/index.js --compile --target=bun-darwin-x64 --outfile tetrio-tui-darwin-x64
+          bun build dist/index.js --compile --target=bun-linux-x64 --outfile tetrio-tui-linux-x64
+          bun build dist/index.js --compile --target=bun-linux-arm64 --outfile tetrio-tui-linux-arm64
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tetrio-tui-*
+          generate_release_notes: true

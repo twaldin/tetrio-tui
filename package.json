@@ -1,6 +1,6 @@
 {
   "name": "tetrio-tui",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A terminal client for TETR.IO \u2014 play Tetra League and custom rooms in your terminal.",
   "type": "module",
   "license": "MIT",

@@ -7,7 +7,5 @@ function rt(text: string, size: any): string {
   renderBigText(buf, 0, 0, text, { fg: [255,255,255] } as Style, size);
   return grid.map(r => r.join('')).join('\n');
 }
-console.log('=== SINGLE mini (w=' + measureBigText('SINGLE','mini').width + ') ===');
-console.log(rt('SINGLE','mini'));
-console.log('=== QUAD mini ===');
-console.log(rt('QUAD','mini'));
+console.log('SINGLE block:', JSON.stringify(measureBigText('SINGLE','block')));
+console.log(rt('SINGLE','block'));

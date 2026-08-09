@@ -340,19 +340,19 @@ export class GameScreen implements Screen {
         if (age > LIFE * 0.6) color = dimRGB(color, 1 - ((age - LIFE * 0.6) / (LIFE * 0.4)) * 0.85);
         // Anchor to the UNSHAKEN board left edge (boardX includes the shake offset sx, which would
         // push the text off the left edge mid-shake). Unshaken board left = startX + panelW + 2.
-        const clearW = measureBigText(a.clearType, 'mini').width;
+        // All action text uses the solid-block font at a UNIFORM height (5 rows).
+        const clearW = measureBigText(a.clearType, 'block').width;
         const unshakenBoardX = startX + panelW + 2;
         const ax = Math.max(2, unshakenBoardX - clearW - 2);
         let ay = boardY + 7;
         if (a.prefix) { buf.drawText(ax, ay, a.prefix, { fg: t.accent, bold: true }); ay += 1; }
-        const clearH = measureBigText(a.clearType, 'mini').height;
-        renderBigText(buf, ax, ay, a.clearType, { fg: color, bold: true }, 'mini'); // compact Figlet font, fits the left margin
-        ay += clearH;
-        if (a.b2b > 0) { buf.drawText(ax, ay, `B2B x${a.b2b}`, { fg: t.accent, bold: true }); ay += 1; }
+        renderBigText(buf, ax, ay, a.clearType, { fg: color, bold: true }, 'block'); // solid blocky, uniform height
+        ay += 5;
+        if (a.b2b > 0) { buf.drawText(ax, ay, `B2B x${a.b2b}`, { fg: t.warn, bold: true }); ay += 1; }
         if (a.combo > 0) {
-          renderBigText(buf, ax, ay, String(a.combo), { fg: t.warn, bold: true }, comboSize(a.combo));
-          const cw = measureBigText(String(a.combo), comboSize(a.combo)).width;
-          buf.drawText(ax + cw + 1, ay + (comboSize(a.combo) === 'big' ? 5 : 2), 'COMBO', { fg: t.text, bold: true });
+          renderBigText(buf, ax, ay, String(a.combo), { fg: t.warn, bold: true }, 'block'); // same height as the clear word
+          const cw = measureBigText(String(a.combo), 'block').width;
+          buf.drawText(ax + cw + 1, ay + 3, 'COMBO', { fg: t.text, bold: true });
         }
       }
     }

@@ -81,12 +81,27 @@ interface GradientCache {
   ghost: Style;
 }
 
+interface HalfblockCache {
+  cell: Record<string, Style>;
+  ghost: Style;
+}
+
+interface ShinyCache {
+  /** Corner glyph 'Γ' in a light tint on the solid piece color. */
+  corner: Record<string, Style>;
+  /** Solid fill ' ' in the piece color. */
+  fill: Record<string, Style>;
+  ghost: Style;
+}
+
 interface StyleCaches {
   _theme: Theme;
   bevel: BevelCache;
   flat: FlatCache;
   outline: OutlineCache;
   gradient: GradientCache;
+  halfblock: HalfblockCache;
+  shiny: ShinyCache;
 }
 
 let _sc: StyleCaches | null = null;
@@ -101,6 +116,9 @@ function sc(): StyleCaches {
   const flat_c: Record<string, Style> = {};
   const outline_c: Record<string, Style> = {};
   const gradient_c: Record<string, Style> = {};
+  const halfblock_c: Record<string, Style> = {};
+  const shiny_corner: Record<string, Style> = {};
+  const shiny_fill: Record<string, Style> = {};
 
   for (const k of PIECE_KEYS) {
     const c = p[k];
@@ -117,6 +135,13 @@ function sc(): StyleCaches {
 
     // gradient: dramatic vertical gradient (top very bright → bottom darker)
     gradient_c[k] = { fg: tint(c, 0.30), bg: shade(c, 0.50) };
+
+    // halfblock: ▄ — bottom half piece color, top half the board shade
+    halfblock_c[k] = { fg: c, bg: t.boardA };
+
+    // shiny: Γ corner highlight (light tint) on solid piece color
+    shiny_corner[k] = { fg: tint(c, 0.55), bg: c };
+    shiny_fill[k] = { fg: c, bg: c };
   }
 
   const gc = p.ghost;
@@ -138,6 +163,15 @@ function sc(): StyleCaches {
     gradient: {
       cell: gradient_c,
       ghost: { fg: tint(gc, 0.18), bg: shade(gc, 0.14) },
+    },
+    halfblock: {
+      cell: halfblock_c,
+      ghost: { fg: shade(gc, 0.9), bg: t.boardA },
+    },
+    shiny: {
+      corner: shiny_corner,
+      fill: shiny_fill,
+      ghost: { fg: tint(gc, 0.24), bg: shade(gc, 0.16) },
     },
   };
   return _sc;
@@ -230,6 +264,48 @@ const GRADIENT: PieceStyleDef = {
   },
 };
 
+/**
+ * Halfblock — ▄ with the board shade on top: every mino reads as only the
+ * bottom half of its terminal row (tetro-tui's vertical-compression look,
+ * adapted to per-mino rendering). Stacks look slimmer; gaps read clearer.
+ */
+const HALFBLOCK: PieceStyleDef = {
+  name: 'halfblock',
+  label: 'Half-block',
+  drawMino(buf, px, py, type) {
+    const s = sc().halfblock.cell[type] ?? sc().halfblock.cell.g;
+    buf.set(px, py, '\u2584', s);       // ▄
+    buf.set(px + 1, py, '\u2584', s);   // ▄
+  },
+  drawGhost(buf, px, py) {
+    const s = sc().halfblock.ghost;
+    buf.set(px, py, '\u2584', s);       // ▄
+    buf.set(px + 1, py, '\u2584', s);   // ▄
+  },
+};
+
+/**
+ * Shiny — glossy "guideline" look (tetro-tui's `Γ ` shiny-blocks preset):
+ * a light corner glyph on the solid piece color. fg/bg inversion does all
+ * the work — the Γ reads as a top-left bevel highlight.
+ */
+const SHINY: PieceStyleDef = {
+  name: 'shiny',
+  label: 'Shiny',
+  drawMino(buf, px, py, type) {
+    const c = sc().shiny;
+    const corner = c.corner[type] ?? c.corner.g;
+    const fill = c.fill[type] ?? c.fill.g;
+    buf.set(px, py, '\u0393', corner);       // Γ
+    buf.set(px + 1, py, ' ', fill);           // solid
+  },
+  drawGhost(buf, px, py) {
+    const s = sc().shiny.ghost;
+    buf.set(px, py, '\u2591', s);       // ░
+    buf.set(px + 1, py, '\u2591', s);   // ░
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
@@ -239,6 +315,8 @@ export const PIECE_STYLES: Record<string, PieceStyleDef> = {
   flat: FLAT,
   outline: OUTLINE,
   gradient: GRADIENT,
+  halfblock: HALFBLOCK,
+  shiny: SHINY,
 };
 
 /** Ordered list of style keys for cycling in the config UI. */

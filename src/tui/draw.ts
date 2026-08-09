@@ -130,25 +130,116 @@ export function drawPiecePreview(buf: RenderBuffer, x: number, y: number, type: 
 // Boxes & panels — rounded corners
 // ---------------------------------------------------------------------------
 
-/** Draw a box with rounded corners (╭╮╰╯). */
-export function drawBox(buf: RenderBuffer, x: number, y: number, w: number, h: number, style?: Style): void {
-  if (buf.drawBox) { buf.drawBox(x, y, w, h, style); return; }
-  const t = theme();
-  const s = style ?? { fg: t.border };
-  buf.set(x, y, '╭', s); buf.set(x + w - 1, y, '╮', s);
-  buf.set(x, y + h - 1, '╰', s); buf.set(x + w - 1, y + h - 1, '╯', s);
-  for (let i = 1; i < w - 1; i++) { buf.set(x + i, y, '─', s); buf.set(x + i, y + h - 1, '─', s); }
-  for (let i = 1; i < h - 1; i++) { buf.set(x, y + i, '│', s); buf.set(x + w - 1, y + i, '│', s); }
+// ---------------------------------------------------------------------------
+// Border-style system — pluggable box glyph presets (tetro-tui inspired).
+//
+// Each preset defines panel glyphs (hold/next/menus) and board glyphs (the
+// playfield frame, one tier heavier). 'none' renders borderless "floating"
+// panels (zen). The active preset is a module singleton selected by config
+// key; a theme may also provide glyph overrides (see themes.ts `borders`).
+// ---------------------------------------------------------------------------
+
+export interface BorderGlyphs {
+  tl: string; tr: string; bl: string; br: string;
+  h: string; v: string;
+  /** Optional distinct bottom edge (tetro-tui's ▀ solid floor). Defaults to h. */
+  hb?: string;
+  /** title join glyphs (drawPanel): titleL = ┤-like, titleR = ├-like. */
+  titleL: string; titleR: string;
 }
 
-/** Draw a strong board border (double-line feel but using box-drawing). */
+export interface BorderPreset {
+  readonly name: string;
+  readonly label: string;
+  readonly panel: BorderGlyphs;
+  readonly board: BorderGlyphs;
+}
+
+const G = (tl: string, tr: string, bl: string, br: string, h: string, v: string, titleL: string, titleR: string): BorderGlyphs =>
+  ({ tl, tr, bl, br, h, v, titleL, titleR });
+
+export const BORDER_STYLES: Record<string, BorderPreset> = {
+  rounded: {
+    name: 'rounded', label: 'Rounded',
+    panel: G('╭', '╮', '╰', '╯', '─', '│', '┤', '├'),
+    board: G('┏', '┓', '┗', '┛', '━', '┃', '┥', '┝'),
+  },
+  single: {
+    name: 'single', label: 'Single',
+    panel: G('┌', '┐', '└', '┘', '─', '│', '┤', '├'),
+    board: G('┌', '┐', '└', '┘', '─', '│', '┤', '├'),
+  },
+  double: {
+    name: 'double', label: 'Double',
+    panel: G('╔', '╗', '╚', '╝', '═', '║', '╡', '╞'),
+    board: G('╔', '╗', '╚', '╝', '═', '║', '╡', '╞'),
+  },
+  heavy: {
+    name: 'heavy', label: 'Heavy',
+    panel: G('┏', '┓', '┗', '┛', '━', '┃', '┥', '┝'),
+    board: G('┏', '┓', '┗', '┛', '━', '┃', '┥', '┝'),
+  },
+  mixed: {
+    // tetro-tui's signature: double sides, dashed top, solid ▀ half-block floor.
+    name: 'mixed', label: 'Mixed (tetro)',
+    panel: G('╭', '╮', '╰', '╯', '─', '│', '┤', '├'),
+    board: { ...G('╓', '╖', '╙', '╜', '╴', '║', '╡', '╞'), hb: '▀' },
+  },
+  ascii: {
+    name: 'ascii', label: 'ASCII',
+    panel: G('+', '+', '+', '+', '-', '|', '>', '<'),
+    board: G('+', '+', '#', '#', '=', '|', '>', '<'),
+  },
+  none: {
+    name: 'none', label: 'None (zen)',
+    panel: G(' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '),
+    board: G(' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '),
+  },
+};
+
+export const BORDER_STYLE_KEYS: readonly string[] = Object.keys(BORDER_STYLES);
+export const DEFAULT_BORDER_STYLE = 'rounded';
+
+let _activeBorderKey: string = DEFAULT_BORDER_STYLE;
+
+/** Switch the active border preset. Returns false if the key is unknown. */
+export function setBorderStyle(key: string): boolean {
+  if (!BORDER_STYLES[key]) return false;
+  _activeBorderKey = key;
+  return true;
+}
+
+export function getBorderStyleKey(): string { return _activeBorderKey; }
+
+/** Resolve the live glyph set: preset base + optional theme overrides. */
+export function borderGlyphs(kind: 'panel' | 'board'): BorderGlyphs {
+  const base = BORDER_STYLES[_activeBorderKey]?.[kind] ?? BORDER_STYLES[DEFAULT_BORDER_STYLE][kind];
+  const ov = (theme() as unknown as { borders?: Partial<BorderGlyphs> }).borders;
+  if (!ov) return base;
+  return { ...base, ...Object.fromEntries(Object.entries(ov).filter(([, v]) => typeof v === 'string' && v.length > 0)) };
+}
+
+/** Draw a box using the active panel border preset. */
+export function drawBox(buf: RenderBuffer, x: number, y: number, w: number, h: number, style?: Style): void {
+  const t = theme();
+  const s = style ?? { fg: t.border };
+  const g = borderGlyphs('panel');
+  buf.set(x, y, g.tl, s); buf.set(x + w - 1, y, g.tr, s);
+  buf.set(x, y + h - 1, g.bl, s); buf.set(x + w - 1, y + h - 1, g.br, s);
+  for (let i = 1; i < w - 1; i++) { buf.set(x + i, y, g.h, s); buf.set(x + i, y + h - 1, g.h, s); }
+  for (let i = 1; i < h - 1; i++) { buf.set(x, y + i, g.v, s); buf.set(x + w - 1, y + i, g.v, s); }
+}
+
+/** Draw the playfield frame using the active board border preset. */
 export function drawBoardBorder(buf: RenderBuffer, x: number, y: number, w: number, h: number, style?: Style): void {
   const t = theme();
   const s = style ?? { fg: t.borderBright };
-  buf.set(x, y, '┏', s); buf.set(x + w - 1, y, '┓', s);
-  buf.set(x, y + h - 1, '┗', s); buf.set(x + w - 1, y + h - 1, '┛', s);
-  for (let i = 1; i < w - 1; i++) { buf.set(x + i, y, '━', s); buf.set(x + i, y + h - 1, '━', s); }
-  for (let i = 1; i < h - 1; i++) { buf.set(x, y + i, '┃', s); buf.set(x + w - 1, y + i, '┃', s); }
+  const g = borderGlyphs('board');
+  const hb = g.hb ?? g.h;
+  buf.set(x, y, g.tl, s); buf.set(x + w - 1, y, g.tr, s);
+  buf.set(x, y + h - 1, g.bl, s); buf.set(x + w - 1, y + h - 1, g.br, s);
+  for (let i = 1; i < w - 1; i++) { buf.set(x + i, y, g.h, s); buf.set(x + i, y + h - 1, hb, s); }
+  for (let i = 1; i < h - 1; i++) { buf.set(x, y + i, g.v, s); buf.set(x + w - 1, y + i, g.v, s); }
 }
 
 /** Draw a panel box with a title in the top border. */
@@ -158,10 +249,11 @@ export function drawPanel(buf: RenderBuffer, x: number, y: number, w: number, h:
   if (opts.fill !== false) buf.fillRect(x, y, w, h, ' ', { bg: t.panel });
   drawBox(buf, x, y, w, h, { fg: color });
   if (title) {
+    const g = borderGlyphs('panel');
     const tx = x + 2;
-    buf.set(tx - 1, y, '┤', { fg: color });
+    buf.set(tx - 1, y, g.titleL, { fg: color });
     buf.drawText(tx, y, ` ${title} `, { fg: t.dim, bold: true, bg: t.panel });
-    buf.set(tx + title.length + 2, y, '├', { fg: color });
+    buf.set(tx + title.length + 2, y, g.titleR, { fg: color });
   }
 }
 

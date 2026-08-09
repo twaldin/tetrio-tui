@@ -7,6 +7,8 @@ import { TetrioSession } from './net/session.js';
 import { TetrioApp } from './tui/main.js';
 import { setTheme, getThemeKey } from './tui/themes.js';
 import { setPieceStyle } from './tui/pieceStyles.js';
+import { setBorderStyle } from './tui/draw.js';
+import { setMinimalMode } from './tui/renderPrefs.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -64,6 +66,20 @@ async function main(): Promise<void> {
     const envStyle = process.env.TETRIO_PIECE_STYLE;
     const chosen = cliStyle ?? envStyle;
     if (chosen) setPieceStyle(chosen);
+  }
+  // Load border style: CLI --border-style > env TETRIO_BORDER_STYLE > config store.
+  {
+    const styleArg = args.indexOf('--border-style');
+    const cliStyle = styleArg >= 0 ? args[styleArg + 1] : undefined;
+    const envStyle = process.env.TETRIO_BORDER_STYLE;
+    const chosen = cliStyle ?? envStyle;
+    if (chosen) setBorderStyle(chosen);
+  }
+  // Minimal mode: CLI --minimal > env TETRIO_MINIMAL > config store.
+  {
+    const cliMinimal = args.includes('--minimal');
+    const envMinimal = process.env.TETRIO_MINIMAL === '1';
+    if (cliMinimal || envMinimal) setMinimalMode(true);
   }
 
   let shuttingDown = false;

@@ -17,6 +17,8 @@ import { ConfigStore } from '../config/store.js';
 import { createConfigMenuNode } from './screens/config.js';
 import { setTheme } from './themes.js';
 import { setPieceStyle } from './pieceStyles.js';
+import { setBorderStyle } from './draw.js';
+import { setEffectsEnabled, setMinimalMode } from './renderPrefs.js';
 import type { GameOptions } from '../types.js';
 
 export class TetrioApp {
@@ -150,6 +152,9 @@ export class TetrioApp {
     const cfg = this.configStore.get();
     if (cfg.video?.theme) setTheme(cfg.video.theme);
     if (cfg.video?.pieceStyle) setPieceStyle(cfg.video.pieceStyle);
+    if (cfg.video?.borderStyle) setBorderStyle(cfg.video.borderStyle);
+    setEffectsEnabled(cfg.video?.effects ?? true);
+    setMinimalMode(cfg.video?.minimal ?? false);
     this.app.requestRender();
   }
 

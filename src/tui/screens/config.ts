@@ -33,6 +33,8 @@ import {
   type IrsMode,
 } from '../../config/store.js';
 import { PIECE_STYLE_KEYS } from '../pieceStyles.js';
+import { BORDER_STYLE_KEYS } from '../draw.js';
+import { THEME_KEYS } from '../themes.js';
 
 // ---------------------------------------------------------------------------
 // row model
@@ -490,6 +492,25 @@ export function createVideoScreen(opts: ConfigScreenFactoryOpts): Screen {
       get: () => store.video.pieceStyle,
       set: (v) => set({ pieceStyle: v as string }),
       format: (v) => String(v).toUpperCase(),
+    },
+    {
+      kind: 'cycle', label: 'BORDER STYLE', hint: 'panel + board frame glyphs (rounded / double / tetro mixed / zen)',
+      options: BORDER_STYLE_KEYS,
+      get: () => store.video.borderStyle,
+      set: (v) => set({ borderStyle: v as string }),
+      format: (v) => String(v).toUpperCase(),
+    },
+    {
+      kind: 'cycle', label: 'THEME', hint: 'color theme — user themes load from ~/.config/tetrio-tui/themes/',
+      options: THEME_KEYS,
+      get: () => store.video.theme,
+      set: (v) => set({ theme: v as string }),
+      format: (v) => String(v).toUpperCase(),
+    },
+    {
+      kind: 'toggle', label: 'MINIMAL MODE', hint: 'no ASCII art, no shake/particles/animations — plain calm text',
+      get: () => store.video.minimal,
+      set: (v) => set({ minimal: v }),
     },
     { kind: 'header', label: '' },
     {

@@ -15,6 +15,7 @@ import { EffectManager, dimRGB } from '../effects.js';
 import { pieceStyleDef } from '../pieceStyles.js';
 import { renderBigTextCentered, renderBigText, measureBigText, comboSize } from '../bigtext.js';
 import { playClear, playTSpin, playCombo, playHardDrop, playAllClear, playB2B } from '../sound.js';
+import { effectsEnabled, bigTextEnabled } from '../renderPrefs.js';
 
 export interface GameScreenOpts {
   controller: LocalGameController;
@@ -257,9 +258,10 @@ export class GameScreen implements Screen {
 
     // shake offset — combine old simple shake with EffectManager's directional shake
     this.fx.advance();
-    const oldSx = this.shakeFrames > 0 ? (this.frame % 2 === 0 ? 1 : -1) * Math.min(2, this.shakeFrames) : 0;
-    const sx = oldSx + this.fx.shakeX;
-    const sy = this.fx.shakeY;
+    const fxOn = effectsEnabled();
+    const oldSx = fxOn && this.shakeFrames > 0 ? (this.frame % 2 === 0 ? 1 : -1) * Math.min(2, this.shakeFrames) : 0;
+    const sx = fxOn ? oldSx + this.fx.shakeX : 0;
+    const sy = fxOn ? this.fx.shakeY : 0;
 
     // layout: hold/stats left, board center, next right, opponents far right
     const panelW = 24;
@@ -273,9 +275,9 @@ export class GameScreen implements Screen {
     const st = s.stats;
     const secs = Math.floor(st.currentTime / 60);
 
-    // HOLD panel
+    // HOLD panel (preview at +1 so its 4-row clear never touches the bottom border)
     drawPanel(buf, startX, boardY, panelW, 6, 'HOLD');
-    drawPiecePreview(buf, startX + 2, boardY + 2, s.hold.piece);
+    drawPiecePreview(buf, startX + 2, boardY + 1, s.hold.piece);
 
     // STATS — plain text at the bottom-left (TETR.IO style), freeing the middle-left for the
     // action-text block. Solo sprint shows PIECES/LINES/TIME/PPS; versus shows APM/PPS/VS/ATK/SNT.
@@ -307,9 +309,13 @@ export class GameScreen implements Screen {
       }
       // persistent B2B indicator — always show the current back-to-back chain (TETR.IO style)
       if (st.btb > 0 && this.ctrl.result === 'playing') {
-        renderBigText(buf, sx2, boardY + 20, `x${st.btb}`, { fg: t.warn, bold: true }, 'block');
-        const bw2 = measureBigText(`x${st.btb}`, 'block').width;
-        buf.drawText(sx2 + bw2 + 1, boardY + 20 + 3, 'B2B', { fg: t.accent, bold: true });
+        if (bigTextEnabled()) {
+          renderBigText(buf, sx2, boardY + 20, `x${st.btb}`, { fg: t.warn, bold: true }, 'block');
+          const bw2 = measureBigText(`x${st.btb}`, 'block').width;
+          buf.drawText(sx2 + bw2 + 1, boardY + 20 + 3, 'B2B', { fg: t.accent, bold: true });
+        } else {
+          buf.drawText(sx2, boardY + 20, `B2B x${st.btb}`, { fg: t.warn, bold: true });
+        }
       }
     } else {
       buf.drawText(sx2, boardY + 15, 'APM', _s.dimS);
@@ -339,10 +345,10 @@ export class GameScreen implements Screen {
       }
     }
 
-    // NEXT panel
+    // NEXT panel (previews at +1+i*4 so the last clear never touches the bottom border)
     const nextX = boardX + boardW + 2;
     drawPanel(buf, nextX, boardY, panelW, 22, 'NEXT');
-    for (let i = 0; i < 5 && i < s.bag.length; i++) drawPiecePreview(buf, nextX + 2, boardY + 2 + i * 4, s.bag[i]);
+    for (let i = 0; i < 5 && i < s.bag.length; i++) drawPiecePreview(buf, nextX + 2, boardY + 1 + i * 4, s.bag[i]);
 
     // garbage incoming indicator (left edge of board)
     const incoming = s.garbage.incoming?.length ?? 0;
@@ -359,13 +365,15 @@ export class GameScreen implements Screen {
       const clearKind = pc.kind;
       const isTetris = clearKind === 'tetris';
       const pieceType = 't'; // default piece type for color
-      // Trigger line clear animation (visual rows — approximate from bottom)
-      const clearRows: number[] = [];
-      for (let i = 0; i < pc.lines; i++) clearRows.push(bh - 1 - i);
-      this.fx.spawnLineClear(clearRows, bw, pieceType, isTetris);
-      // Shake for clears
-      const clearMag = isTetris ? 'heavy' : pc.lines >= 3 ? 'medium' : 'light';
-      this.fx.spawnShake(clearMag, 0, 1);
+      if (effectsEnabled()) {
+        // Trigger line clear animation (visual rows — approximate from bottom)
+        const clearRows: number[] = [];
+        for (let i = 0; i < pc.lines; i++) clearRows.push(bh - 1 - i);
+        this.fx.spawnLineClear(clearRows, bw, pieceType, isTetris);
+        // Shake for clears
+        const clearMag = isTetris ? 'heavy' : pc.lines >= 3 ? 'medium' : 'light';
+        this.fx.spawnShake(clearMag, 0, 1);
+      }
       // TETR.IO-style action text: store the block (rendered on the LEFT of the board).
       // T-SPIN prefix above the clear type; B2B + combo below. One block at a time.
       const isTspin = pc.tspin === 'full' || pc.tspin === 'mini';
@@ -384,14 +392,14 @@ export class GameScreen implements Screen {
       // Attack counter: the number of lines sent to the enemy — the ONLY big diagonal ASCII.
       // It appears on the right and drifts down-left as it fades (matching the real game).
       // Only in versus modes — solo sprint (40L/blitz/zen/practice) has no opponent, no attack UI.
-      if (pc.attack >= 1 && this.ctrl.result === 'playing' && this.isVersus) {
+      if (pc.attack >= 1 && this.ctrl.result === 'playing' && this.isVersus && effectsEnabled()) {
         const atkColor: RGB = pc.attack >= 4 ? [255, 100, 100] : [255, 200, 100];
         this.fx.spawnBigText(`+${pc.attack}`, atkColor, boardX + bw * 2 + panelW + 8, boardY + bh - 8, 'big', true, 0, true, -1, 1);
       }
     }
     if (this._pendingAllClear) {
       this._pendingAllClear = false;
-      this.fx.spawnAllClear(boardX, boardY, bw);
+      if (effectsEnabled()) this.fx.spawnAllClear(boardX, boardY, bw);
     }
 
     // Once the game ends, drop transient text effects (clear popups, combo/b2b) so the
@@ -412,24 +420,35 @@ export class GameScreen implements Screen {
         // Anchor to the UNSHAKEN board left edge (boardX includes the shake offset sx, which would
         // push the text off the left edge mid-shake). Unshaken board left = startX + panelW + 2.
         // All action text uses the solid-block font at a UNIFORM height (5 rows).
-        const clearW = measureBigText(a.clearType, 'block').width;
         const unshakenBoardX = startX + panelW + 2;
-        const ax = Math.max(2, unshakenBoardX - clearW - 2);
-        let ay = boardY + 7;
-        if (a.prefix) { buf.drawText(ax, ay, a.prefix, { fg: t.accent, bold: true }); ay += 1; }
-        renderBigText(buf, ax, ay, a.clearType, { fg: color, bold: true }, 'block'); // solid blocky, uniform height
-        ay += 5;
-        if (a.b2b > 0) { buf.drawText(ax, ay, `B2B x${a.b2b}`, { fg: t.warn, bold: true }); ay += 1; }
-        if (a.combo > 0) {
-          renderBigText(buf, ax, ay, String(a.combo), { fg: t.warn, bold: true }, 'block'); // same height as the clear word
-          const cw = measureBigText(String(a.combo), 'block').width;
-          buf.drawText(ax + cw + 1, ay + 3, 'COMBO', { fg: t.text, bold: true });
+        if (bigTextEnabled()) {
+          const clearW = measureBigText(a.clearType, 'block').width;
+          const ax = Math.max(2, unshakenBoardX - clearW - 2);
+          let ay = boardY + 7;
+          if (a.prefix) { buf.drawText(ax, ay, a.prefix, { fg: t.accent, bold: true }); ay += 1; }
+          renderBigText(buf, ax, ay, a.clearType, { fg: color, bold: true }, 'block'); // solid blocky, uniform height
+          ay += 5;
+          if (a.b2b > 0) { buf.drawText(ax, ay, `B2B x${a.b2b}`, { fg: t.warn, bold: true }); ay += 1; }
+          if (a.combo > 0) {
+            renderBigText(buf, ax, ay, String(a.combo), { fg: t.warn, bold: true }, 'block'); // same height as the clear word
+            const cw = measureBigText(String(a.combo), 'block').width;
+            buf.drawText(ax + cw + 1, ay + 3, 'COMBO', { fg: t.text, bold: true });
+          }
+        } else {
+          // minimal: plain one-line action text, no ASCII art
+          const ax = Math.max(2, unshakenBoardX - 16);
+          const parts: string[] = [];
+          if (a.prefix) parts.push(a.prefix);
+          if (a.clearType) parts.push(a.clearType);
+          if (a.b2b > 0) parts.push(`B2B x${a.b2b}`);
+          if (a.combo > 0) parts.push(`${a.combo} COMBO`);
+          buf.drawText(ax, boardY + 7, parts.join(' '), { fg: color, bold: true });
         }
       }
     }
 
     // Render all EffectManager overlays
-    this.fx.render(buf, boardX, boardY, bw, bh);
+    if (effectsEnabled()) this.fx.render(buf, boardX, boardY, bw, bh);
 
     // opponents (right of NEXT)
     let ox = nextX + panelW + 2;

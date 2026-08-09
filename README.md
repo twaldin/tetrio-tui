@@ -17,10 +17,15 @@ engine (SRS+ kicks, Park-Miller RNG, exact versus attack/garbage tables).
 
 - **Play Tetra League** ranked duels in your terminal.
 - **Custom rooms**: browse public rooms, join, chat, ready up, play & spectate (live opponent boards).
-- **Solo modes**: 40 LINES, BLITZ, ZEN, practice (offline, no server).
+- **Solo modes**: 40 LINES, BLITZ (real TETR.IO scoring + 2:00 timer), ZEN, practice (offline, no server).
 - **TETRA CHANNEL**: leaderboards (League / XP / AR), global news feed, player profiles.
 - **Full menu tree** mirroring the webapp: MULTIPLAYER / SOLO / TETRA CHANNEL / CONFIG.
 - **Config** (keybinds, handling, video, audio) persisted to disk, with **TETR.IO config import**.
+- **6 piece styles** (bevel / flat / outline / gradient / halfblock / shiny) × **7 border styles**
+  (rounded / single / double / heavy / tetro-mixed / ascii / zen-none) — mix freely.
+- **User themes from disk** (`~/.config/tetrio-tui/themes/*.json`): every color, border glyph,
+  and action word is overridable — see [docs/THEMES.md](docs/THEMES.md).
+- **Minimal mode**: no ASCII art, no shake/particles — a calm plain-text board.
 - Truecolor diff-rendering at 60fps, line-clear / attack / all-clear effects, ghost piece, hold,
   next queue, per-mode stats (APM / PPS / VS).
 
@@ -45,6 +50,7 @@ Log in on the LOGIN screen with your account, or:
 ```bash
 npx tsx src/index.ts --guest            # play as a guest (no League)
 npx tsx src/index.ts --token <jwt>      # resume an existing session token
+npx tsx src/index.ts --offline          # no network at all — straight to the menu
 ```
 
 **Default controls** (rebindable in CONFIG): `←/→` move, `↓` soft drop, `space` hard drop,

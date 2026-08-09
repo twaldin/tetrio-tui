@@ -54,9 +54,18 @@ export const PIECE_ROTATIONS: Record<PieceType, [number, number][][]> = {
 
 export const PIECE_SIZES: Record<PieceType, number> = { i: 4, o: 2, t: 3, s: 3, z: 3, l: 3, j: 3 };
 
-/** Spawn column (bounding-box left edge) = ceil(W/2) - 1 (+piece offset). */
+/**
+ * Spawn column per SRS/TETR.IO (docs/gamemechanics.md §2): the piece matrix anchor
+ * enters at ceil(W/2) - 1 for every piece; absolute cell col = anchor + cx - dx with
+ * dx=1 (I/J/L/S/T/Z) or 0 (O). On a 10-wide board that places the occupied spawn
+ * columns at I: 3-6, O: 4-5, J/L/S/T/Z: 3-5. PIECE_ROTATIONS cells are used directly
+ * (board col = x + cx; O's cells are pre-shifted +1 in x, folding in its dx=0 anchor),
+ * so solve x from the piece's leftmost occupied spawn cell.
+ */
 export function spawnX(type: PieceType, boardWidth: number): number {
-  return Math.ceil(boardWidth / 2) - 1;
+  const targetLeft = Math.ceil(boardWidth / 2) - 2 + (type === 'o' ? 1 : 0);
+  const minCx = Math.min(...PIECE_ROTATIONS[type][0].map((c) => c[0]));
+  return targetLeft - minCx;
 }
 
 type Kick = [number, number];

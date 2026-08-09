@@ -7,6 +7,9 @@ import { TetrioSession } from './net/session.js';
 import { TetrioApp } from './tui/main.js';
 import { setTheme, getThemeKey } from './tui/themes.js';
 import { setPieceStyle } from './tui/pieceStyles.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const HELP = `tetrio-tui — a terminal TETR.IO client
 
@@ -15,6 +18,26 @@ usage: tetrio-tui [options]
   --token <jwt>         log in with a session token
   --help                show this help
 `;
+
+// --- session token persistence (~/.config/tetrio-tui/session.json) ---
+function sessionFile(): string {
+  const home = process.env.HOME ?? os.homedir();
+  return path.join(process.env.XDG_CONFIG_HOME ?? path.join(home, '.config'), 'tetrio-tui', 'session.json');
+}
+function loadSavedSession(): { token: string; userid: string } | null {
+  try {
+    const d = JSON.parse(fs.readFileSync(sessionFile(), 'utf8'));
+    if (d?.token && d?.userid) return { token: d.token, userid: d.userid };
+  } catch {}
+  return null;
+}
+function saveSession(token: string, userid: string): void {
+  try {
+    const f = sessionFile();
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, JSON.stringify({ token, userid, savedAt: Date.now() }));
+  } catch {}
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -66,6 +89,7 @@ async function main(): Promise<void> {
         await session.loginAnonymous(login.username);
       }
       await session.connect();
+      if (session.api.token && session.userid) saveSession(session.api.token, session.userid); // persist login across sessions
       tetrioApp.showHome();
     } catch (e: any) {
       loginScreen.setError(String(e?.body?.error?.msg ?? e?.message ?? e));
@@ -85,7 +109,13 @@ async function main(): Promise<void> {
   } else if (guestIdx >= 0) {
     doConnect({ method: 'anonymous', username: args[guestIdx + 1] && !args[guestIdx + 1].startsWith('--') ? args[guestIdx + 1] : undefined });
   } else {
-    app.push(loginScreen);
+    // resume a saved session token if present (login persists across sessions)
+    const saved = loadSavedSession();
+    if (saved) {
+      doConnect({ method: 'token', token: saved.token });
+    } else {
+      app.push(loginScreen);
+    }
   }
 }
 

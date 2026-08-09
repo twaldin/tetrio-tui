@@ -164,7 +164,19 @@ export class TetrioApp {
     const screen = new GameScreen({
       controller: ctrl, opponents: this.opponents, onExit: () => { ctrl.forfeit(); this.app.pop(); }, modeLabel: label, autoPlay: process.env.TUI_AUTOPLAY === '1' || process.argv.includes('--autoplay'),
     });
+    screen.setKeymap(this.gameKeymap()); // apply the configured keybinds
     this.push(screen);
+  }
+
+  /** Build the game keymap (key -> action) by inverting the configured keybinds (action -> keys). */
+  private gameKeymap(): Record<string, string> {
+    const kb = this.configStore.get().keybinds as unknown as Record<string, string[]>;
+    const map: Record<string, string> = { escape: 'exit' };
+    for (const [action, keys] of Object.entries(kb)) {
+      if (!Array.isArray(keys)) continue;
+      for (const key of keys) if (typeof key === 'string' && key) map[key.toLowerCase()] = action;
+    }
+    return map;
   }
 
   private launchLeague(): void {
@@ -213,6 +225,7 @@ export class TetrioApp {
       onExit: () => { this.gameconn.leave(); this.session.send('game.forfeit'); this.app.pop(); },
       modeLabel: label,
     });
+    screen.setKeymap(this.gameKeymap()); // apply the configured keybinds
     this.push(screen);
   }
 

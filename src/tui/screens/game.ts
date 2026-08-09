@@ -8,7 +8,7 @@ import { theme } from '../themes.js';
 import { LocalGameController } from '../../game/localgame.js';
 import { OpponentTracker } from '../../game/state.js';
 import { visibleBoard, BUFFER_ROWS } from '../../game/engine.js';
-import { bestPlacement } from '../../game/solver.js';
+import { bestMove } from '../../game/solver.js';
 import { PIECE_ROTATIONS } from '../../game/pieces.js';
 import type { BoardGrid, FallingPiece } from '../../types.js';
 import { EffectManager, dimRGB } from '../effects.js';
@@ -181,12 +181,21 @@ export class GameScreen implements Screen {
     if (!engine || !engine.state.playing || engine.state.gameover) return;
     const f = engine.falling;
     if (!f) return;
-    this.ctrl.setInput({ hardDrop: false });
+    this.ctrl.setInput({ hardDrop: false, hold: false });
     if (this.autoPlayCooldown > 0) { this.autoPlayCooldown--; return; }
     const board = visibleBoard(engine.state.board);
-    const { x, r } = bestPlacement(board, f.type);
-    f.r = r;
-    f.x = x;
+    // The solver plans the whole 9-0 side-well game: a 3-piece lookahead over the
+    // preview queue with HOLD as a first-class move (it saves I-pieces for the well and
+    // reroutes S/Z around forced holes). It sustains the full back-to-back Tetris chain.
+    const move = bestMove(board, f.type, engine.state.bag, engine.hold, !engine.holdLocked);
+    if (move.useHold) {
+      // Swap first; the swapped-in piece is placed on a later call (hold locks until then).
+      this.ctrl.setInput({ hold: true });
+      this.autoPlayCooldown = 3;
+      return;
+    }
+    f.r = move.r;
+    f.x = move.x;
     this.ctrl.setInput({ hardDrop: true });
     this.autoPlayCooldown = 7; // calm, readable pace for the demo (~4 PPS)
   }

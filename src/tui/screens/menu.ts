@@ -123,7 +123,6 @@ export class MenuScreen implements Screen {
       const color = item.disabled ? THEME.panel : (item.color ?? this.node.color ?? THEME.accent);
       drawMenuItem(buf, x, y, w, item.label, item.sub ?? '', sel, color);
       if (item.badge) buf.drawText(x + w - item.badge.length - 2, y + 1, item.badge, { fg: sel ? [10, 10, 18] : THEME.good, bold: true });
-      if (item.disabled && item.sub) buf.drawText(x + w - item.sub.length - 2, y + 1, item.sub, { fg: THEME.dim });
       this.itemRects.push({ x, y, w, h: 3 });
       y += 4;
     }

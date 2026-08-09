@@ -95,6 +95,7 @@ export class GameScreen implements Screen {
     if (ev.type !== 'down') return;
     const key = this.keymap[ev.key] ?? this.keymap[ev.sequence ?? ''];
     if (!key) return;
+    if (key === 'reset') { this.ctrl.restart(); return; } // retry: restart the game
     if (ACTION_KEYS.has(key)) {
       // TAP: fire immediately, release next tick (terminals don't send key-up reliably)
       this.ctrl.setKey(key, true);

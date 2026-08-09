@@ -50,7 +50,10 @@ export class LocalGameController extends EventEmitter {
   constructor() { super(); }
 
   /** Start a new local game. gameid assigned by server (game.enter/game.start). */
+  private _startParams: { options: Partial<GameOptions>; seed?: number; objective?: { type: 'lines'; count: number } } | null = null;
+
   start(gameid: number, options: Partial<GameOptions>, seed?: number, objective?: { type: 'lines'; count: number }): void {
+    this._startParams = { options, seed, objective };
     this.gameid = gameid;
     this.engine = createGame(options, seed);
     this.frame = 0;
@@ -64,6 +67,11 @@ export class LocalGameController extends EventEmitter {
     this.frameBuffer.push({ type: 'start', frame: 0, data: {} });
     this.frameBuffer.push({ type: 'full', frame: 0, data: this.buildFullState() });
     this.flush(true);
+  }
+
+  /** Restart the current game with the same options/seed/objective (the retry/reset key). */
+  restart(): void {
+    if (this._startParams) this.start(this.gameid, this._startParams.options, this._startParams.seed, this._startParams.objective);
   }
 
   /** The wire FullState for the `full` frame (opponents reconstruct our board from it). */

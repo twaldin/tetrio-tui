@@ -123,12 +123,27 @@ export class GameScreen implements Screen {
     }
   }
 
+  private _tickAcc = 0;
   update(dtMs: number): void {
     this.frame++;
     if (this.autoPlay) this.driveAutoPlay();
-    // run the local engine at ~60fps (accumulate real time)
-    const events = this.ctrl.tick();
-    this.pumpInput();
+    // Run the engine at a true 60fps (1 engine frame = 1/60s) regardless of the render rate —
+    // accumulate real elapsed time and tick once per 1/60s. (Was ticking once per 30fps render
+    // = half real speed, which made DAS/ARR/gravity 2x too slow.)
+    this._tickAcc += dtMs;
+    const TICK_MS = 1000 / 60;
+    let events: any = null;
+    let guard = 0;
+    let ticked = false;
+    while (this._tickAcc >= TICK_MS && guard++ < 8) {
+      this._tickAcc -= TICK_MS;
+      const e = this.ctrl.tick();
+      if (e) events = e;
+      ticked = true;
+    }
+    // only release tap/held keys once the engine has actually processed them (a tick) —
+    // otherwise a fast press could be released before the engine ever saw it
+    if (ticked) this.pumpInput();
     this.opponents.tickAll();
     if (events) {
       if (events.lines && events.lines.lines > 0) {

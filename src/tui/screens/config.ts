@@ -34,7 +34,7 @@ import {
 } from '../../config/store.js';
 import { PIECE_STYLE_KEYS } from '../pieceStyles.js';
 import { BORDER_STYLE_KEYS } from '../draw.js';
-import { THEME_KEYS } from '../themes.js';
+import { themeKeys } from '../themes.js';
 
 // ---------------------------------------------------------------------------
 // row model
@@ -502,7 +502,7 @@ export function createVideoScreen(opts: ConfigScreenFactoryOpts): Screen {
     },
     {
       kind: 'cycle', label: 'THEME', hint: 'color theme — user themes load from ~/.config/tetrio-tui/themes/',
-      options: THEME_KEYS,
+      options: themeKeys(),
       get: () => store.video.theme,
       set: (v) => set({ theme: v as string }),
       format: (v) => String(v).toUpperCase(),

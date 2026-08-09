@@ -5,7 +5,7 @@ import { TerminalDriver } from './tui/driver.js';
 import { LoginScreen, type LoginResult } from './tui/screens/login.js';
 import { TetrioSession } from './net/session.js';
 import { TetrioApp } from './tui/main.js';
-import { setTheme, getThemeKey } from './tui/themes.js';
+import { setTheme, getThemeKey, loadUserThemes } from './tui/themes.js';
 import { setPieceStyle } from './tui/pieceStyles.js';
 import { setBorderStyle } from './tui/draw.js';
 import { setMinimalMode } from './tui/renderPrefs.js';
@@ -44,6 +44,9 @@ function saveSession(token: string, userid: string): void {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes('--help')) { console.log(HELP); process.exit(0); }
+
+  // Register disk themes FIRST so the persisted config's theme key can resolve to them.
+  loadUserThemes();
 
   const driver = new TerminalDriver();
   const app = new App(driver);

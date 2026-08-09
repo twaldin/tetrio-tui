@@ -16,7 +16,7 @@
  * Zero per-frame allocations in the hot path — effect slots are preallocated and reused.
  */
 import type { RenderBuffer, Style, RGB } from '../tui/app.js';
-import { theme } from '../tui/themes.js';
+import { theme, themeWord } from '../tui/themes.js';
 import { pieceColor } from '../tui/draw.js';
 import { renderBigText, renderBigTextCentered, measureBigText, comboSize } from '../tui/bigtext.js';
 
@@ -367,9 +367,9 @@ export class EffectManager {
     const life = Math.max(1, Math.round(50 * _animIntensity / 100));
     this.effects.push({ kind: 'allClear', age: 0, life });
     this.spawnShake('heavy', 0, 1);
-    // Big "ALL CLEAR" text centered on board
+    // Big "ALL CLEAR" text centered on board (theme-word overridable)
     const textY = boardY + 8;
-    this.spawnBigText('ALL CLEAR', [255, 215, 0], -1, textY, 'big', true, 0);
+    this.spawnBigText(themeWord('allclear', 'ALL CLEAR'), [255, 215, 0], -1, textY, 'big', true, 0);
   }
 
   // ------ tick + render ------

@@ -4,7 +4,7 @@
  */
 import type { RenderBuffer, Screen, KeyEvent, Style, RGB } from '../app.js';
 import { THEME, PIECE_COLORS, drawBoard, drawPiecePreview, drawBox, drawBoardBorder, drawPanel, center, pieceColor } from '../draw.js';
-import { theme } from '../themes.js';
+import { theme, themeWord } from '../themes.js';
 import { LocalGameController } from '../../game/localgame.js';
 import { OpponentTracker } from '../../game/state.js';
 import { visibleBoard, BUFFER_ROWS } from '../../game/engine.js';
@@ -378,10 +378,13 @@ export class GameScreen implements Screen {
       // T-SPIN prefix above the clear type; B2B + combo below. One block at a time.
       const isTspin = pc.tspin === 'full' || pc.tspin === 'mini';
       const isBig = isTetris || isTspin;
-      const typeNames: Record<string, string> = { single: 'SINGLE', double: 'DOUBLE', triple: 'TRIPLE', tetris: 'QUAD' };
+      const typeNames: Record<string, string> = {
+        single: themeWord('single', 'SINGLE'), double: themeWord('double', 'DOUBLE'),
+        triple: themeWord('triple', 'TRIPLE'), tetris: themeWord('tetris', 'QUAD'),
+      };
       const clearColor = t.text; // clear word is always white (real TETR.IO); prefix/B2B/combo carry the color
       this._action = {
-        prefix: pc.tspin === 'full' ? 'T-SPIN' : pc.tspin === 'mini' ? 'MINI T-SPIN' : null,
+        prefix: pc.tspin === 'full' ? themeWord('tspin', 'T-SPIN') : pc.tspin === 'mini' ? themeWord('tspin_mini', 'MINI T-SPIN') : null,
         clearType: isTspin && pc.lines === 4 ? 'QUAD' : (typeNames[pc.kind] ?? ''),
         size: 'small',
         color: clearColor as RGB,

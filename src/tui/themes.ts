@@ -9,6 +9,9 @@
  * `THEMES` for enumeration (config screen, etc.).
  */
 import type { RGB } from '../tui/app.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 
 // ---------------------------------------------------------------------------
 // Theme shape
@@ -488,8 +491,11 @@ export const THEMES: Record<string, Theme> = {
   monokai: MONOKAI,
 };
 
-/** Ordered list of theme keys for cycling in the config UI. */
+/** Ordered list of theme keys for cycling in the config UI (built-ins; call themeKeys() for the live list incl. disk themes). */
 export const THEME_KEYS: readonly string[] = Object.keys(THEMES);
+
+/** Live list of all registered theme keys (built-ins + disk-loaded). */
+export function themeKeys(): string[] { return Object.keys(THEMES); }
 
 // ---------------------------------------------------------------------------
 // Active theme (module singleton)
@@ -516,3 +522,132 @@ export function getThemeKey(): string { return _activeKey; }
 
 /** The live theme object. Safe to call in hot render paths (no allocation). */
 export function theme(): Theme { return _active; }
+
+/** Optional per-theme action-word overrides (from disk themes). */
+export function themeWord(key: string, fallback: string): string {
+  const w = (_active as unknown as { words?: Record<string, unknown> }).words;
+  const v = w?.[key];
+  return typeof v === 'string' && v.length > 0 ? v : fallback;
+}
+
+// ---------------------------------------------------------------------------
+// User themes from disk — ~/.config/tetrio-tui/themes/<key>.json
+//
+// Fully extensible format: any color in the Theme interface (flat key or
+// dotted "pieces.i"), optional border-glyph overrides, optional action-word
+// overrides. Missing colors fall back to the `extends` theme (default tetrio).
+//
+// {
+//   "name": "My Theme",
+//   "extends": "tetrio",                      // optional base (built-in or disk)
+//   "colors": {
+//     "accent": "#ff55c8",                    // hex or [r,g,b]
+//     "pieces": { "i": "#50e6fa", "ghost": [70,70,95] },
+//     "boardA": "#10101c"
+//   },
+//   "borders": { "h": "═", "v": "║" },         // optional glyph overrides
+//   "words": { "tetris": "QUAD", "tspin": "T-SPIN" }   // optional action words
+// }
+// ---------------------------------------------------------------------------
+
+export interface UserThemeResult { key: string; ok: boolean; error?: string }
+
+/** Parse a color: "#rgb"/"#rrggbb" hex string or [r,g,b] number array. */
+export function parseColor(v: unknown): RGB | null {
+  if (Array.isArray(v) && v.length >= 3 && v.slice(0, 3).every((n) => typeof n === 'number' && n >= 0 && n <= 255)) {
+    return [Math.round(v[0]), Math.round(v[1]), Math.round(v[2])];
+  }
+  if (typeof v === 'string') {
+    const m = v.trim().match(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+    if (!m) return null;
+    let hexs = m[1];
+    if (hexs.length === 3) hexs = hexs.split('').map((c) => c + c).join('');
+    return [parseInt(hexs.slice(0, 2), 16), parseInt(hexs.slice(2, 4), 16), parseInt(hexs.slice(4, 6), 16)];
+  }
+  return null;
+}
+
+/** All flat (non-pieces) color fields of the Theme interface. */
+const THEME_COLOR_FIELDS = [
+  'base', 'mantle', 'surface', 'overlay', 'bg', 'panel', 'panelAlt',
+  'border', 'borderBright', 'borderActive', 'borderSubtle', 'boardFrame',
+  'text', 'subtext', 'dim', 'faint',
+  'accent', 'accent2', 'good', 'warn', 'bad', 'info',
+  'league', 'solo', 'channel', 'config',
+  'boardA', 'boardB', 'gridLine', 'ghost', 'garbage', 'lockFlash', 'clearFlash',
+] as const;
+
+const PIECE_COLOR_FIELDS = ['i', 'o', 't', 's', 'z', 'l', 'j', 'g', 'ghost'] as const;
+
+/**
+ * Load user themes from `<dir>` (defaults to the config dir's themes/).
+ * Registers valid themes into THEMES under their file key. Later files win.
+ * Never throws — bad files are reported in the result and skipped.
+ */
+export function loadUserThemes(dir?: string): UserThemeResult[] {
+  const themesDir = dir ?? (() => {
+    const xdg = process.env.XDG_CONFIG_HOME?.trim();
+    if (xdg) return path.join(xdg, 'tetrio-tui', 'themes');
+    const home = process.env.HOME?.trim() || os.homedir();
+    return home ? path.join(home, '.config', 'tetrio-tui', 'themes') : null;
+  })();
+  const results: UserThemeResult[] = [];
+  if (!themesDir) return results;
+  let files: string[] = [];
+  try {
+    files = fs.readdirSync(themesDir).filter((f) => f.endsWith('.json')).sort();
+  } catch {
+    return results; // no dir yet — fine
+  }
+  for (const file of files) {
+    const key = file.replace(/\.json$/, '');
+    try {
+      const raw = JSON.parse(fs.readFileSync(path.join(themesDir, file), 'utf8')) as Record<string, unknown>;
+      const baseKey = typeof raw.extends === 'string' ? raw.extends : 'tetrio';
+      const baseTheme = THEMES[baseKey] ?? THEMES.tetrio;
+      // deep clone base so overrides never mutate built-ins
+      const t: Theme = structuredClone(baseTheme);
+      t.name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : key;
+
+      const colors = (raw.colors ?? {}) as Record<string, unknown>;
+      for (const [ck, cv] of Object.entries(colors)) {
+        const col = parseColor(cv);
+        if (ck === 'pieces' && cv && typeof cv === 'object' && !Array.isArray(cv)) {
+          for (const [pk, pv] of Object.entries(cv as Record<string, unknown>)) {
+            const pc = parseColor(pv);
+            if (pc && (PIECE_COLOR_FIELDS as readonly string[]).includes(pk)) (t.pieces as unknown as Record<string, RGB>)[pk] = pc;
+          }
+          continue;
+        }
+        if (!col) continue;
+        if (ck.startsWith('pieces.')) {
+          const pk = ck.slice(7);
+          if ((PIECE_COLOR_FIELDS as readonly string[]).includes(pk)) (t.pieces as unknown as Record<string, RGB>)[pk] = col;
+        } else if ((THEME_COLOR_FIELDS as readonly string[]).includes(ck)) {
+          (t as unknown as Record<string, RGB>)[ck] = col;
+        }
+      }
+
+      if (raw.borders && typeof raw.borders === 'object') {
+        const b: Record<string, string> = {};
+        for (const [bk, bv] of Object.entries(raw.borders as Record<string, unknown>)) {
+          if (typeof bv === 'string' && bv.length > 0 && ['tl','tr','bl','br','h','v','hb','titleL','titleR'].includes(bk)) b[bk] = bv;
+        }
+        if (Object.keys(b).length > 0) (t as unknown as { borders: Record<string, string> }).borders = b;
+      }
+      if (raw.words && typeof raw.words === 'object') {
+        const w: Record<string, string> = {};
+        for (const [wk, wv] of Object.entries(raw.words as Record<string, unknown>)) {
+          if (typeof wv === 'string' && wv.length > 0) w[wk] = wv;
+        }
+        if (Object.keys(w).length > 0) (t as unknown as { words: Record<string, string> }).words = w;
+      }
+
+      THEMES[key] = t;
+      results.push({ key, ok: true });
+    } catch (e) {
+      results.push({ key, ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return results;
+}

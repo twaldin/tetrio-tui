@@ -36,6 +36,16 @@ function tint(c: RGB, f: number): RGB {
   ];
 }
 
+/** WCAG-ish relative luminance (0..1). */
+function luminance(c: RGB): number {
+  const f = (v: number) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+}
+function contrastRatio(a: RGB, b: RGB): number {
+  const l1 = luminance(a), l2 = luminance(b);
+  return l1 > l2 ? (l1 + 0.05) / (l2 + 0.05) : (l2 + 0.05) / (l1 + 0.05);
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -124,16 +134,18 @@ function sc(): StyleCaches {
 
     // bevel: subtle raised block — top slightly brighter, bottom slightly darker.
     // Both cells IDENTICAL → no vertical stripe. Subtle shading reads as 3D.
-    bevel_c[k] = { fg: tint(c, 0.07), bg: shade(c, 0.88) };
+    bevel_c[k] = { fg: tint(c, 0.12), bg: shade(c, 0.80) };
 
     // flat: pure solid
     flat_c[k] = { fg: c, bg: c };
 
-    // outline: solid fill, soft dark top edge as row separator (0.45 = subtle, not gridlines)
-    outline_c[k] = { fg: c, bg: shade(c, 0.45) };
+    // outline: solid fill with a NEUTRAL dark cap -> a true outline between rows.
+    // (a piece-hued cap made it pixel-identical to halfblock)
+    outline_c[k] = { fg: c, bg: shade(t.bg, 0.55) };
 
-    // gradient: dramatic vertical gradient (top very bright → bottom darker)
-    gradient_c[k] = { fg: tint(c, 0.30), bg: shade(c, 0.50) };
+    // gradient: dramatic vertical gradient (top very bright → bottom darker;
+    // 0.62 keeps dark pieces (dracula J, blues) above board brightness)
+    gradient_c[k] = { fg: tint(c, 0.30), bg: shade(c, 0.62) };
 
     // halfblock: ▄ — bottom half full color, top half a deep shade of the piece
     // (solid-but-slim; a board-colored top half read as a "missing" gap line)
@@ -151,8 +163,13 @@ function sc(): StyleCaches {
   for (const k of PIECE_KEYS) {
     const c = p[k];
     // FULL piece color on the board shade: the ▒ glyph's 50% density provides the
-    // translucency (darkening the fg too made ghosts read as board-colored holes).
-    ghostCell[k] = { fg: k === 'g' ? gc : c, bg: t.boardA };
+    // translucency. Dark hues are tinted up until the AVERAGE (50% blend) still
+    // separates from the board — otherwise dark-blue ghosts read as board holes.
+    let gcol = k === 'g' ? gc : tint(c, 0.15);
+    const blend = (fg: RGB): RGB => [Math.round((fg[0] + t.boardA[0]) / 2), Math.round((fg[1] + t.boardA[1]) / 2), Math.round((fg[2] + t.boardA[2]) / 2)];
+    let guard = 0;
+    while (contrastRatio(blend(gcol), t.boardA) < 1.5 && guard++ < 6) gcol = tint(gcol, 0.15);
+    ghostCell[k] = { fg: gcol, bg: t.boardA };
   }
   ghostCell.ghost = { fg: shade(gc, 0.9), bg: t.boardA }; // type-less fallback
 

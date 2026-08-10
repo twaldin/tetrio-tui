@@ -64,12 +64,13 @@ async function main() {
     await new Promise((r) => setTimeout(r, 6000)); await snap(prac, 'mode__practice'); prac.killProcess();
     const min = await mk(['--minimal']); await intoGame(min);
     await new Promise((r) => setTimeout(r, 7000)); await snap(min, 'mode__minimal'); min.killProcess();
-    // CLEAR results: full 40L autoplay (~40s)
+    // CLEAR results: full 40L autoplay (~40s). Poll for a results-only marker —
+    // 'esc back' also appears on TOP OUT (matched early = false capture).
     const fin = await mk(); await intoGame(fin);
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 240; i++) {
       await new Promise((r) => setTimeout(r, 500));
       const txt = await fin.text({ immediate: true });
-      if (/esc back/i.test(txt)) break;
+      if (/MAX COMBO/i.test(txt)) break;
     }
     await snap(fin, 'mode__results_clear'); fin.killProcess();
     // TOP OUT: hard-drop straight up the middle at high gravity? easiest: stack center fast

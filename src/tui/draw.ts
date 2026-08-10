@@ -273,8 +273,9 @@ export function drawMenuItem(buf: RenderBuffer, x: number, y: number, w: number,
     buf.drawText(x + 2, y + 1, sub, { fg: [30, 30, 44] as RGB, bg: color });
   } else {
     buf.fillRect(x, y, w, h, ' ', { bg: t.panel });
-    // subtle bottom+right edge so the card reads as a panel (panel-vs-bg contrast is ~1.1:1 in most themes)
-    const frame: Style = { fg: t.borderSubtle };
+    // bottom+right edge so the card reads as a panel (panel-vs-bg contrast is ~1.1:1
+    // in most themes; borderSubtle was invisible outside tetrio)
+    const frame: Style = { fg: t.border };
     for (let i = 1; i < w - 1; i++) buf.set(x + i, y + h - 1, '─', frame);
     for (let i = 0; i < h - 1; i++) buf.set(x + w - 1, y + i, '│', frame);
     buf.set(x + w - 1, y + h - 1, '╯', frame);

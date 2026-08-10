@@ -305,9 +305,10 @@ export class GameScreen implements Screen {
     const st = s.stats;
     const secs = Math.floor(st.currentTime / 60);
 
-    // HOLD panel (preview at +1 so its 4-row clear never touches the bottom border)
+    // HOLD panel (preview at +1 so its 4-row clear never touches the bottom border;
+    // x centered within the panel's inner width)
     drawPanel(buf, startX, boardY, panelW, 6, 'HOLD');
-    drawPiecePreview(buf, startX + 2, boardY + 1, s.hold.piece);
+    drawPiecePreview(buf, startX + Math.floor((panelW - 8) / 2), boardY + 1, s.hold.piece);
 
     // STATS — plain text at the bottom-left (TETR.IO style), freeing the middle-left for the
     // action-text block. Solo sprint shows PIECES/LINES/TIME/PPS; versus shows APM/PPS/VS/ATK/SNT.
@@ -377,10 +378,12 @@ export class GameScreen implements Screen {
       }
     }
 
-    // NEXT panel (previews at +1+i*4 so the last clear never touches the bottom border)
+    // NEXT panel (previews at +1+i*4 so the last clear never touches the bottom border;
+    // x centered within the panel)
     const nextX = boardX + boardW + 2;
+    const prevX = nextX + Math.floor((panelW - 8) / 2);
     drawPanel(buf, nextX, boardY, panelW, 22, 'NEXT');
-    for (let i = 0; i < 5 && i < s.bag.length; i++) drawPiecePreview(buf, nextX + 2, boardY + 1 + i * 4, s.bag[i]);
+    for (let i = 0; i < 5 && i < s.bag.length; i++) drawPiecePreview(buf, prevX, boardY + 1 + i * 4, s.bag[i]);
 
     // garbage incoming indicator (left edge of board)
     const incoming = s.garbage.incoming?.length ?? 0;

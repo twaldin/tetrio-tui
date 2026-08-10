@@ -34,7 +34,7 @@ import {
 } from '../../config/store.js';
 import { PIECE_STYLE_KEYS } from '../pieceStyles.js';
 import { BORDER_STYLE_KEYS } from '../draw.js';
-import { themeKeys } from '../themes.js';
+import { themeKeys, getThemeKey } from '../themes.js';
 
 // ---------------------------------------------------------------------------
 // row model
@@ -304,7 +304,16 @@ export class ConfigListScreen implements Screen {
         } else if (hint) {
           const hx = x + 20;
           const maxLen = x + w - 4 - value.text.length - hx;
-          if (maxLen > 8) buf.drawText(hx, y, hint.length > maxLen ? `${hint.slice(0, maxLen - 1)}…` : hint, { fg: dim });
+          if (maxLen > 8) {
+            // truncate at a word boundary, never mid-word
+            let hh = hint;
+            if (hh.length > maxLen) {
+              const cut = hh.slice(0, maxLen - 1);
+              const sp = cut.lastIndexOf(' ');
+              hh = (sp > maxLen * 0.5 ? cut.slice(0, sp) : cut) + '…';
+            }
+            buf.drawText(hx, y, hh, { fg: dim });
+          }
         }
       }
       y += compact ? 2 : 3;
@@ -497,21 +506,21 @@ export function createVideoScreen(opts: ConfigScreenFactoryOpts): Screen {
       format: (v) => String(v).toUpperCase(),
     },
     {
-      kind: 'cycle', label: 'BORDER STYLE', hint: 'panel + board frame glyphs (rounded / double / tetro mixed / zen)',
+      kind: 'cycle', label: 'BORDER STYLE', hint: 'panel + board frame glyphs',
       options: BORDER_STYLE_KEYS,
       get: () => store.video.borderStyle,
       set: (v) => set({ borderStyle: v as string }),
       format: (v) => String(v).toUpperCase(),
     },
     {
-      kind: 'cycle', label: 'THEME', hint: 'color theme — user themes load from ~/.config/tetrio-tui/themes/',
+      kind: 'cycle', label: 'THEME', hint: 'color theme — load your own from disk',
       options: themeKeys(),
-      get: () => store.video.theme,
+      get: () => getThemeKey(), // show the LIVE theme (CLI/env overrides display too)
       set: (v) => set({ theme: v as string }),
       format: (v) => String(v).toUpperCase(),
     },
     {
-      kind: 'toggle', label: 'MINIMAL MODE', hint: 'no ASCII art, no shake/particles/animations — plain calm text',
+      kind: 'toggle', label: 'MINIMAL MODE', hint: 'no ASCII art, shake, or particles',
       get: () => store.video.minimal,
       set: (v) => set({ minimal: v }),
     },

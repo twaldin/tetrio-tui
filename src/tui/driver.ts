@@ -288,7 +288,9 @@ export class TerminalDriver implements AppDriver {
           if (map[code]) ev = keyFor(map[code]);
         }
         if (ev) return { event: ev, next: i + csi[0].length };
-        return { event: { key: 'escape', type: 'down', sequence: rest.slice(0, csi[0].length) }, next: i + csi[0].length };
+        // unknown CSI: ignore (never map to escape — a stray focus/kitty/fkey sequence
+        // must not forfeit the game)
+        return { event: { key: '__noop', type: 'down', sequence: rest.slice(0, csi[0].length) }, next: i + csi[0].length };
       }
       // SS3: ESC O <char>
       const ss3 = /^\x1bO(.)/.exec(rest);

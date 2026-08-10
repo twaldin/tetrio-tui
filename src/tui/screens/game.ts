@@ -246,6 +246,8 @@ export class GameScreen implements Screen {
   /** Drive the game with the solver (demo auto-play): place each piece at the best spot, instantly. */
   private _clearedOnEnd = false;
   private autoPlayCooldown = 0;
+  /** TUI_TURBO=1: superhuman pace — one placement every other render frame (~15-30 PPS). */
+  private readonly turbo = process.env.TUI_TURBO === '1';
   private driveAutoPlay(): void {
     const engine = this.ctrl.engine;
     if (!engine || !engine.state.playing || engine.state.gameover) return;
@@ -261,13 +263,13 @@ export class GameScreen implements Screen {
     if (move.useHold) {
       // Swap first; the swapped-in piece is placed on a later call (hold locks until then).
       this.ctrl.setInput({ hold: true });
-      this.autoPlayCooldown = 3;
+      this.autoPlayCooldown = this.turbo ? 1 : 3;
       return;
     }
     f.r = move.r;
     f.x = move.x;
     this.ctrl.setInput({ hardDrop: true });
-    this.autoPlayCooldown = 7; // calm, readable pace for the demo (~4 PPS)
+    this.autoPlayCooldown = this.turbo ? 1 : 7; // 7 = calm demo pace (~4 PPS); 1 = turbo
   }
 
   render(buf: RenderBuffer): void {
@@ -326,10 +328,12 @@ export class GameScreen implements Screen {
         buf.drawText(sx2, boardY + 18, 'PPS', _s.dimS);
         buf.drawText(sx2 + 8, boardY + 18, st.pps.toFixed(2), _s.textBold);
       } else {
+        const is40 = this.modeLabel === '40 LINES';
         buf.drawText(sx2, boardY + 15, 'PIECES', _s.dimS);
         buf.drawText(sx2 + 8, boardY + 15, `${st.piecesplaced}`, _s.textBold);
         buf.drawText(sx2, boardY + 16, 'LINES', _s.dimS);
-        buf.drawText(sx2 + 8, boardY + 16, `${st.lines}/40`, _s.textBold);
+        // zen/practice have no line goal — show the plain count, not "0/40"
+        buf.drawText(sx2 + 8, boardY + 16, is40 ? `${st.lines}/40` : `${st.lines}`, _s.textBold);
         buf.drawText(sx2, boardY + 17, 'TIME', _s.dimS);
         buf.drawText(sx2 + 8, boardY + 17, formatTime(secs), _s.textBold);
         buf.drawText(sx2, boardY + 18, 'PPS', _s.dimS);

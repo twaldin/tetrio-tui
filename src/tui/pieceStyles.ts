@@ -11,10 +11,9 @@
  *  - flat    — pure solid ██. Cleanest modern look.
  *  - outline — solid fill with dark separator line between rows.
  *  - gradient — more dramatic vertical gradient (top bright → bottom dark).
- *  - halfblock — half-height minoes (▄ on board-colored top half): every piece
- *                row occupies only the bottom half of its terminal row, so a
- *                2-row piece reads ~1 terminal row shorter (tetro-tui's ▀▄█
- *                vertical-compression trick, adapted to per-mino rendering).
+ *  - halfblock — slim minoes (▄: full-color bottom half, deep-shade top half
+ *                of the SAME piece color): pieces read shorter and lighter
+ *                (tetro-tui's ▀▄█ vertical-compression trick, per-mino).
  *  - shiny   — glossy "guideline" look via fg/bg inversion: a light-shade Γ
  *                corner glyph on a solid piece-color background (tetro-tui's
  *                `Γ ` shiny-blocks preset).
@@ -46,8 +45,8 @@ const PIECE_KEYS = ['i', 'o', 't', 's', 'z', 'l', 'j', 'g'] as const;
 /** Draw one mino (2 chars wide × 1 row) at pixel position (px, py). */
 export type MinoDrawFn = (buf: RenderBuffer, px: number, py: number, type: string) => void;
 
-/** Draw one ghost mino (2 chars wide × 1 row) at pixel position (px, py). */
-export type GhostDrawFn = (buf: RenderBuffer, px: number, py: number) => void;
+/** Draw one ghost mino (2 chars wide × 1 row) at pixel position (px, py). type = the falling piece's type (for piece-tinted ghosts). */
+export type GhostDrawFn = (buf: RenderBuffer, px: number, py: number, type?: string) => void;
 
 export interface PieceStyleDef {
   readonly name: string;
@@ -63,27 +62,27 @@ export interface PieceStyleDef {
 interface BevelCache {
   /** Both cells get the same style — no stripes. */
   cell: Record<string, Style>;
-  ghost: Style;
+  ghost: Record<string, Style>;
 }
 
 interface FlatCache {
   cell: Record<string, Style>;
-  ghost: Style;
+  ghost: Record<string, Style>;
 }
 
 interface OutlineCache {
   cell: Record<string, Style>;
-  ghost: Style;
+  ghost: Record<string, Style>;
 }
 
 interface GradientCache {
   cell: Record<string, Style>;
-  ghost: Style;
+  ghost: Record<string, Style>;
 }
 
 interface HalfblockCache {
   cell: Record<string, Style>;
-  ghost: Style;
+  ghost: Record<string, Style>;
 }
 
 interface ShinyCache {
@@ -91,7 +90,7 @@ interface ShinyCache {
   corner: Record<string, Style>;
   /** Solid fill ' ' in the piece color. */
   fill: Record<string, Style>;
-  ghost: Style;
+  ghost: Record<string, Style>;
 }
 
 interface StyleCaches {
@@ -125,54 +124,45 @@ function sc(): StyleCaches {
 
     // bevel: subtle raised block — top slightly brighter, bottom slightly darker.
     // Both cells IDENTICAL → no vertical stripe. Subtle shading reads as 3D.
-    bevel_c[k] = { fg: tint(c, 0.10), bg: shade(c, 0.82) };
+    bevel_c[k] = { fg: tint(c, 0.07), bg: shade(c, 0.88) };
 
     // flat: pure solid
     flat_c[k] = { fg: c, bg: c };
 
-    // outline: solid fill, dark top edge acts as separator between rows
-    outline_c[k] = { fg: c, bg: shade(c, 0.30) };
+    // outline: solid fill, soft dark top edge as row separator (0.45 = subtle, not gridlines)
+    outline_c[k] = { fg: c, bg: shade(c, 0.45) };
 
     // gradient: dramatic vertical gradient (top very bright → bottom darker)
     gradient_c[k] = { fg: tint(c, 0.30), bg: shade(c, 0.50) };
 
-    // halfblock: ▄ — bottom half piece color, top half the board shade
-    halfblock_c[k] = { fg: c, bg: t.boardA };
+    // halfblock: ▄ — bottom half full color, top half a deep shade of the piece
+    // (solid-but-slim; a board-colored top half read as a "missing" gap line)
+    halfblock_c[k] = { fg: c, bg: shade(c, 0.30) };
 
     // shiny: Γ corner highlight (light tint) on solid piece color
     shiny_corner[k] = { fg: tint(c, 0.55), bg: c };
     shiny_fill[k] = { fg: c, bg: c };
   }
 
+  // Ghost cells: piece-TINTED so the landing preview reads on every theme.
+  // (Was theme.ghost gray at ~15% luminance — invisible on dark boards.)
   const gc = p.ghost;
+  const ghostCell: Record<string, Style> = {};
+  for (const k of PIECE_KEYS) {
+    const c = p[k];
+    // 60% piece color on the board shade: clearly a shadow of THIS piece.
+    ghostCell[k] = { fg: shade(k === 'g' ? gc : c, 0.60), bg: t.boardA };
+  }
+  ghostCell.ghost = { fg: shade(gc, 0.9), bg: t.boardA }; // type-less fallback
 
   _sc = {
     _theme: t,
-    bevel: {
-      cell: bevel_c,
-      ghost: { fg: tint(gc, 0.22), bg: shade(gc, 0.16) },
-    },
-    flat: {
-      cell: flat_c,
-      ghost: { fg: tint(gc, 0.24), bg: shade(gc, 0.16) },
-    },
-    outline: {
-      cell: outline_c,
-      ghost: { fg: tint(gc, 0.25), bg: shade(gc, 0.16) },
-    },
-    gradient: {
-      cell: gradient_c,
-      ghost: { fg: tint(gc, 0.18), bg: shade(gc, 0.14) },
-    },
-    halfblock: {
-      cell: halfblock_c,
-      ghost: { fg: shade(gc, 0.9), bg: t.boardA },
-    },
-    shiny: {
-      corner: shiny_corner,
-      fill: shiny_fill,
-      ghost: { fg: tint(gc, 0.24), bg: shade(gc, 0.16) },
-    },
+    bevel: { cell: bevel_c, ghost: ghostCell },
+    flat: { cell: flat_c, ghost: ghostCell },
+    outline: { cell: outline_c, ghost: ghostCell },
+    gradient: { cell: gradient_c, ghost: ghostCell },
+    halfblock: { cell: halfblock_c, ghost: ghostCell },
+    shiny: { corner: shiny_corner, fill: shiny_fill, ghost: ghostCell },
   };
   return _sc;
 }
@@ -197,10 +187,11 @@ const BEVEL: PieceStyleDef = {
     buf.set(px, py, '\u2580', s);       // ▀
     buf.set(px + 1, py, '\u2580', s);   // ▀
   },
-  drawGhost(buf, px, py) {
-    const s = sc().bevel.ghost;
-    buf.set(px, py, '\u2591', s);       // ░
-    buf.set(px + 1, py, '\u2591', s);   // ░
+  drawGhost(buf, px, py, type) {
+    const g = sc().bevel.ghost;
+    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
+    buf.set(px, py, '\u2592', s);       // ▒
+    buf.set(px + 1, py, '\u2592', s);   // ▒
   },
 };
 
@@ -213,10 +204,11 @@ const FLAT: PieceStyleDef = {
     buf.set(px, py, '\u2588', s);       // █
     buf.set(px + 1, py, '\u2588', s);   // █
   },
-  drawGhost(buf, px, py) {
-    const s = sc().flat.ghost;
-    buf.set(px, py, '\u2591', s);       // ░
-    buf.set(px + 1, py, '\u2591', s);   // ░
+  drawGhost(buf, px, py, type) {
+    const g = sc().flat.ghost;
+    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
+    buf.set(px, py, '\u2592', s);       // ▒
+    buf.set(px + 1, py, '\u2592', s);   // ▒
   },
 };
 
@@ -237,10 +229,11 @@ const OUTLINE: PieceStyleDef = {
     buf.set(px, py, '\u2584', s);       // ▄
     buf.set(px + 1, py, '\u2584', s);   // ▄
   },
-  drawGhost(buf, px, py) {
-    const s = sc().outline.ghost;
-    buf.set(px, py, '\u2584', s);       // ▄
-    buf.set(px + 1, py, '\u2584', s);   // ▄
+  drawGhost(buf, px, py, type) {
+    const g = sc().outline.ghost;
+    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
+    buf.set(px, py, '\u2592', s);       // ▒
+    buf.set(px + 1, py, '\u2592', s);   // ▒
   },
 };
 
@@ -257,10 +250,11 @@ const GRADIENT: PieceStyleDef = {
     buf.set(px, py, '\u2580', s);       // ▀
     buf.set(px + 1, py, '\u2580', s);   // ▀
   },
-  drawGhost(buf, px, py) {
-    const s = sc().gradient.ghost;
-    buf.set(px, py, '\u2580', s);       // ▀
-    buf.set(px + 1, py, '\u2580', s);   // ▀
+  drawGhost(buf, px, py, type) {
+    const g = sc().gradient.ghost;
+    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
+    buf.set(px, py, '\u2592', s);       // ▒
+    buf.set(px + 1, py, '\u2592', s);   // ▒
   },
 };
 
@@ -277,10 +271,11 @@ const HALFBLOCK: PieceStyleDef = {
     buf.set(px, py, '\u2584', s);       // ▄
     buf.set(px + 1, py, '\u2584', s);   // ▄
   },
-  drawGhost(buf, px, py) {
-    const s = sc().halfblock.ghost;
-    buf.set(px, py, '\u2584', s);       // ▄
-    buf.set(px + 1, py, '\u2584', s);   // ▄
+  drawGhost(buf, px, py, type) {
+    const g = sc().halfblock.ghost;
+    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
+    buf.set(px, py, '\u2592', s);       // ▒
+    buf.set(px + 1, py, '\u2592', s);   // ▒
   },
 };
 
@@ -299,10 +294,11 @@ const SHINY: PieceStyleDef = {
     buf.set(px, py, '\u0393', corner);       // Γ
     buf.set(px + 1, py, ' ', fill);           // solid
   },
-  drawGhost(buf, px, py) {
-    const s = sc().shiny.ghost;
-    buf.set(px, py, '\u2591', s);       // ░
-    buf.set(px + 1, py, '\u2591', s);   // ░
+  drawGhost(buf, px, py, type) {
+    const g = sc().shiny.ghost;
+    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
+    buf.set(px, py, '\u2592', s);       // ▒
+    buf.set(px + 1, py, '\u2592', s);   // ▒
   },
 };
 

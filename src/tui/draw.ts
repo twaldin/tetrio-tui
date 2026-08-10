@@ -66,11 +66,12 @@ export function drawBoard(
   x: number,
   y: number,
   grid: BoardGrid,
-  opts: { ghostSet?: Set<number> | null; width?: number; height?: number } = {},
+  opts: { ghostSet?: Set<number> | null; ghostType?: string | null; width?: number; height?: number } = {},
 ): number {
   const h = grid.length;
   const w = grid[0]?.length ?? 10;
   const gs = opts.ghostSet;
+  const gtype = opts.ghostType ?? 'ghost';
   const c = bc();
   const style = pieceStyleDef();
   for (let row = 0; row < h; row++) {
@@ -81,7 +82,7 @@ export function drawBoard(
       if (cell) {
         style.drawMino(buf, px, py, cell);
       } else if (gs && gs.has(row * 256 + col)) {
-        style.drawGhost(buf, px, py);
+        style.drawGhost(buf, px, py, gtype);
       } else {
         const s = (row + col) % 2 === 0 ? c.ea : c.eb;
         buf.set(px, py, ' ', s);
@@ -272,6 +273,11 @@ export function drawMenuItem(buf: RenderBuffer, x: number, y: number, w: number,
     buf.drawText(x + 2, y + 1, sub, { fg: [30, 30, 44] as RGB, bg: color });
   } else {
     buf.fillRect(x, y, w, h, ' ', { bg: t.panel });
+    // subtle bottom+right edge so the card reads as a panel (panel-vs-bg contrast is ~1.1:1 in most themes)
+    const frame: Style = { fg: t.borderSubtle };
+    for (let i = 1; i < w - 1; i++) buf.set(x + i, y + h - 1, '─', frame);
+    for (let i = 0; i < h - 1; i++) buf.set(x + w - 1, y + i, '│', frame);
+    buf.set(x + w - 1, y + h - 1, '╯', frame);
     for (let i = 0; i < h; i++) buf.set(x, y + i, '▌', { fg: color, bg: t.panel });
     buf.drawText(x + 2, y, label, { fg: t.text, bold: true });
     buf.drawText(x + 2, y + 1, sub, { fg: t.dim });

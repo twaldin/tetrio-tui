@@ -288,7 +288,10 @@ export class ConfigListScreen implements Screen {
       const dim: RGB = sel ? [30, 30, 46] : THEME.dim;
       buf.fillRect(x, y, w, compact ? 1 : 2, ' ', { bg });
       if (row.kind === 'action') {
-        const c = row.danger ? THEME.bad : THEME.accent2;
+        // danger rows: lift the theme's bad color toward white so the destructive
+        // action stays >=4.5:1 on every theme (measured on nord/solarized/dracula/gruvbox)
+        const lift = (cc: RGB, f: number): RGB => [Math.min(255, Math.round(cc[0] + (255 - cc[0]) * f)), Math.min(255, Math.round(cc[1] + (255 - cc[1]) * f)), Math.min(255, Math.round(cc[2] + (255 - cc[2]) * f))] as RGB;
+        const c = row.danger ? lift(THEME.bad, 0.35) : THEME.accent2;
         buf.drawText(x + 2, y, row.label, { fg: sel ? fg : c, bold: true });
         if (!compact) buf.drawText(x + 2, y + 1, row.hint, { fg: dim });
       } else {

@@ -3,6 +3,7 @@
  * Used for versus (league/custom) AND offline practice (solo modes).
  */
 import type { RenderBuffer, Screen, KeyEvent, Style, RGB } from '../app.js';
+import * as fs from 'node:fs';
 import { THEME, PIECE_COLORS, drawBoard, drawPiecePreview, drawBox, drawBoardBorder, drawPanel, center, pieceColor } from '../draw.js';
 import { theme, themeWord } from '../themes.js';
 import { LocalGameController } from '../../game/localgame.js';
@@ -16,6 +17,7 @@ import { pieceStyleDef } from '../pieceStyles.js';
 import { renderBigTextCentered, renderBigText, measureBigText, comboSize } from '../bigtext.js';
 import { playClear, playTSpin, playCombo, playHardDrop, playAllClear, playB2B } from '../sound.js';
 import { effectsEnabled, bigTextEnabled } from '../renderPrefs.js';
+import { kittyKeyboard } from '../inputMode.js';
 
 export interface GameScreenOpts {
   controller: LocalGameController;
@@ -92,11 +94,23 @@ export class GameScreen implements Screen {
 
   onShow(): void {}
   onKey(ev: KeyEvent): void {
-    if (ev.key === 'escape') { this.onExit(); return; }
-    if (ev.type !== 'down') return;
+    if (ev.key === 'escape' && ev.type === 'down') { this.onExit(); return; }
     const key = this.keymap[ev.key] ?? this.keymap[ev.sequence ?? ''];
     if (!key) return;
-    if (key === 'reset') { this.pendingTaps.length = 0; this.ctrl.restart(); return; } // retry: restart the game
+    this.ilog('key', { key, type: ev.type, repeat: !!ev.repeat, kitty: kittyKeyboard() });
+    if (key === 'reset' && ev.type === 'down') { this.pendingTaps.length = 0; this.ctrl.restart(); return; } // retry: restart the game
+    if (kittyKeyboard()) {
+      // kitty keyboard protocol: real keyup events — exact press/release, no heuristics.
+      // OS-level repeats are ignored: the engine's own DAS/ARR drives held-key movement.
+      if (ev.repeat) return;
+      if (ACTION_KEYS.has(key)) {
+        if (ev.type === 'down') this.pendingTaps.push(key);
+      } else {
+        this.ctrl.setKey(key, ev.type === 'down');
+      }
+      return;
+    }
+    if (ev.type !== 'down') return;
     if (ACTION_KEYS.has(key)) {
       // TAP: queue one press per keydown. Each queued press becomes a clean ONE-TICK PULSE on a
       // future engine tick (see tickWithTaps), so rapid presses each register as a fresh press
@@ -142,6 +156,7 @@ export class GameScreen implements Screen {
   }
 
   private pumpInput(): void {
+    if (kittyKeyboard()) { this.holdTimers.clear(); return; } // real keyups — no timeout heuristic
     // release held keys that stopped repeating
     const now = Date.now();
     for (const [key, t] of this.holdTimers) {
@@ -150,8 +165,19 @@ export class GameScreen implements Screen {
   }
 
   private _tickAcc = 0;
+  // dev-only input/feel instrumentation: TUI_INPUT_LOG=<file> logs key events + piece-x
+  // changes with ms timestamps (DAS/ARR latency measurement, no effect when unset).
+  private _ilog: fs.WriteStream | null = null;
+  private _lastLogX = -99;
+  private ilog(kind: string, data: Record<string, unknown>): void {
+    if (!process.env.TUI_INPUT_LOG) return;
+    if (!this._ilog) this._ilog = fs.createWriteStream(process.env.TUI_INPUT_LOG, { flags: 'a' });
+    this._ilog.write(JSON.stringify({ t: Date.now(), kind, ...data }) + '\n');
+  }
+
   update(dtMs: number): void {
     this.frame++;
+    if (this.frame === 2) { const o: any = this.ctrl.engine?.state.options ?? {}; this.ilog('options', { das: o.das, arr: o.arr, dcd: o.dcd, sdf: o.sdf, kitty: kittyKeyboard() }); }
     if (this.autoPlay) this.driveAutoPlay();
     // Run the engine at a true 60fps (1 engine frame = 1/60s) regardless of the render rate —
     // accumulate real elapsed time and tick once per 1/60s. (Was ticking once per 30fps render
@@ -167,6 +193,8 @@ export class GameScreen implements Screen {
       if (e) events = e;
       ticked = true;
     }
+    const fx = this.ctrl.engine?.falling?.x ?? -1;
+    if (fx !== this._lastLogX) { this._lastLogX = fx; this.ilog('move', { x: fx, r: this.ctrl.engine?.falling?.r }); }
     // only release held keys once the engine has actually processed them (a tick) —
     // otherwise a fast press could be released before the engine ever saw it
     if (ticked) this.pumpInput();

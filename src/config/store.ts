@@ -95,9 +95,10 @@ export type ChangeListener = (cfg: Config, section: ConfigSection | 'all') => vo
 /** UI ranges + step sizes for the numeric handling fields (match TETR.IO's own limits). */
 export interface HandlingRange { min: number; max: number; step: number; bigStep: number }
 export const HANDLING_LIMITS: Record<'arr' | 'das' | 'dcd' | 'sdf', HandlingRange> = {
-  arr: { min: 0, max: 5, step: 0.2, bigStep: 1 },
-  das: { min: 0, max: 20, step: 1, bigStep: 5 },
-  dcd: { min: 0, max: 20, step: 1, bigStep: 5 },
+  // TETR.IO parity: frames may be fractional (its sliders show e.g. 6.7F = 112ms)
+  arr: { min: 0, max: 5, step: 0.1, bigStep: 1 },
+  das: { min: 0, max: 20, step: 0.1, bigStep: 1 },
+  dcd: { min: 0, max: 20, step: 0.1, bigStep: 1 },
   sdf: { min: 1, max: 41, step: 1, bigStep: 5 },
 };
 

@@ -32,6 +32,7 @@ export interface KeyEvent {
   alt?: boolean;
   shift?: boolean;
   type: 'down' | 'up';
+  repeat?: boolean;        // kitty-protocol key repeat (hold) event
 }
 
 export interface MouseEvent {

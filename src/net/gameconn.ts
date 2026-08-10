@@ -21,6 +21,8 @@ export class GameConnection extends EventEmitter {
   myGameid = 0;
   myUserid: string;
   inGame = false;
+  /** Player-side handling (das/arr/dcd/sdf/...) merged over server room options — handling is client-side in TETR.IO. */
+  handling: Partial<GameOptions> = {};
 
   constructor(session: TetrioSession) {
     super();
@@ -60,7 +62,7 @@ export class GameConnection extends EventEmitter {
   enterGame(gameid: number, options: Partial<GameOptions>, seed?: number): void {
     this.myGameid = gameid;
     this.inGame = true;
-    this.controller.start(gameid, options, seed);
+    this.controller.start(gameid, { ...options, ...this.handling }, seed);
     this.emit('start', gameid);
   }
 

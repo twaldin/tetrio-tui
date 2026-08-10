@@ -13,7 +13,7 @@ import { LeagueScreen } from './screens/league.js';
 import { RoomListingScreen, RoomLobbyScreen } from './screens/lobby.js';
 import { ChannelApi } from '../net/channel.js';
 import { createChannelScreen } from './screens/channel.js';
-import { ConfigStore } from '../config/store.js';
+import { ConfigStore, type HandlingConfig } from '../config/store.js';
 import { createConfigMenuNode } from './screens/config.js';
 import { setTheme } from './themes.js';
 import { setPieceStyle } from './pieceStyles.js';
@@ -37,6 +37,7 @@ export class TetrioApp {
     this.client = new TetrioClient(session);
     this.opponents = new OpponentTracker();
     this.gameconn = new GameConnection(session);
+    this.gameconn.handling = this.configStore.handling as unknown as Partial<GameOptions>;
     this.wireGame();
     this.setupDebugDump();
     this.applyConfig();
@@ -155,13 +156,14 @@ export class TetrioApp {
     if (cfg.video?.borderStyle) setBorderStyle(cfg.video.borderStyle);
     setEffectsEnabled(cfg.video?.effects ?? true);
     setMinimalMode(cfg.video?.minimal ?? false);
+    this.gameconn.handling = cfg.handling as unknown as Partial<GameOptions>; // next versus game gets it
     this.app.requestRender();
   }
 
   // --- launchers ---
   private launchSolo(mode: string): void {
     const ctrl = new LocalGameController();
-    const options: Partial<GameOptions> = soloOptionsFor(mode);
+    const options: Partial<GameOptions> = soloOptionsFor(mode, this.configStore.handling);
     // offline: no server — start immediately with our own gameid + seed
     const objective = mode === '40l' ? { type: 'lines' as const, count: 40 } : mode === 'blitz' ? { type: 'time' as const, seconds: 120 } : undefined;
     const seed = process.env.TUI_SEED ? parseInt(process.env.TUI_SEED, 10) : Math.floor(Math.random() * 0x7fffffff);
@@ -288,7 +290,7 @@ export class TetrioApp {
   }
 }
 
-function soloOptionsFor(mode: string): Partial<GameOptions> {
+function soloOptionsFor(mode: string, handling?: HandlingConfig): Partial<GameOptions> {
   const base: Partial<GameOptions> = {
     boardwidth: 10, boardheight: 20, g: 0.02, locktime: 30, lockresets: 15,
     allow180: true, allow_harddrop: true, hasgarbage: false, bagtype: '7-bag',
@@ -296,5 +298,8 @@ function soloOptionsFor(mode: string): Partial<GameOptions> {
     garbagemultiplier: 1, nextcount: 5, infinite_hold: false,
   };
   if (mode === 'zen') { base.g = 0.0; }
+  // player handling config is applied 1:1 — this is what the game FEELS like.
+  // (frames @60fps, fractional allowed, matching TETR.IO's HANDLING sliders)
+  if (handling) Object.assign(base, handling);
   return base;
 }

@@ -431,18 +431,18 @@ describe('config screens', () => {
     expect(buf.text()).toContain('DAS');
     expect(buf.text()).toContain('167ms');        // DAS 10F live hint
 
-    scr.onKey(kd('right'));                       // ARR 2 -> 2.2
-    expect(s.handling.arr).toBeCloseTo(2.2);
+    scr.onKey(kd('right'));                       // ARR 2 -> 2.1 (0.1F steps, TETR.IO granularity)
+    expect(s.handling.arr).toBeCloseTo(2.1);
     scr.onKey(kd('right', { shift: true }));      // big step +1
-    expect(s.handling.arr).toBeCloseTo(3.2);
-    scr.onKey(kd('left'));                        // -0.2
+    expect(s.handling.arr).toBeCloseTo(3.1);
+    scr.onKey(kd('left'));                        // -0.1
     expect(s.handling.arr).toBeCloseTo(3.0);
 
     scr.onKey(kd('down'));                        // DAS
     scr.onKey(kd('right'));
-    expect(s.handling.das).toBe(11);
+    expect(s.handling.das).toBeCloseTo(10.1);
     scr.render(buf);
-    expect(buf.text()).toContain('183ms');
+    expect(buf.text()).toContain('168ms');
 
     // toggle via enter (down x2: DCD, SDF... then skip header to SAFE LOCK)
     scr.onKey(kd('down')); scr.onKey(kd('down')); scr.onKey(kd('down'));

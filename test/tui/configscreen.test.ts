@@ -96,10 +96,10 @@ ptyTest('config demo: menu renders, rebinding works and persists, handling stepp
     expect(handling).toContain('ARR');
     expect(handling).toContain('167ms');           // DAS 10F hint
     await session.press('down');                   // -> DAS row
-    await session.press('right');                  // 10 -> 11
-    await session.waitForText('183ms', { timeout: 5000 });
+    await session.press('right');                  // 10 -> 10.1 (0.1F steps)
+    await session.waitForText('168ms', { timeout: 5000 });
     const savedHandling = JSON.parse(fs.readFileSync(path.join(configDir, 'config.json'), 'utf8'));
-    expect(savedHandling.handling.das).toBe(11);
+    expect(savedHandling.handling.das).toBeCloseTo(10.1);
 
     // --- clean exit: esc to root, esc again quits ---
     await session.press('escape');

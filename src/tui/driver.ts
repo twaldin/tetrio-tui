@@ -5,10 +5,18 @@
  */
 import { EventEmitter } from 'node:events';
 import type { AppDriver, KeyEvent, MouseEvent, RenderBuffer, Style, RGB } from './app.js';
+import { setKittyKeyboard } from './inputMode.js';
 
 type PackedCell = { ch: string; fg: number; bg: number; attr: number };
 
 const ATTR_BOLD = 1, ATTR_DIM = 2, ATTR_UNDERLINE = 4, ATTR_INVERSE = 8;
+
+// kitty keyboard protocol: non-printable key codes -> logical names
+const KITTY_KEY_NAMES: Record<number, string> = {
+  9: 'tab', 13: 'return', 27: 'escape', 32: 'space', 127: 'backspace',
+  57394: 'home', 57395: 'end', 57396: 'pageup', 57397: 'pagedown',
+  57398: 'insert', 57399: 'delete',
+};
 
 function rgbToNum(rgb: RGB | null | undefined): number {
   if (!rgb) return -1;
@@ -121,6 +129,10 @@ export class TerminalDriver implements AppDriver {
     this.started = true;
     const stdin = process.stdin;
     this.out.write('\x1b[?1049h\x1b[?25l\x1b[2J\x1b[?1006h\x1b[?1003h'); // alt screen, hide cursor, clear, SGR mouse any-event tracking
+    // Kitty keyboard protocol: query support, then push flags 1+2 (disambiguate +
+    // report event types => real key RELEASE events). Legacy terminals ignore both;
+    // the reply to the query flips kittyKeyboard on (inputMode.ts).
+    this.out.write('\x1b[?u\x1b[>3u');
     if (stdin.isTTY) stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding('utf8');
@@ -177,7 +189,7 @@ export class TerminalDriver implements AppDriver {
     stdin.removeAllListeners('data');
     if (stdin.isTTY) stdin.setRawMode(false);
     stdin.pause();
-    this.out.write('\x1b[?1003l\x1b[?1006l\x1b[0m\x1b[?25h\x1b[?1049l'); // mouse off, reset, show cursor, leave alt screen
+    this.out.write('\x1b[<u\x1b[?1003l\x1b[?1006l\x1b[0m\x1b[?25h\x1b[?1049l'); // kitty pop, mouse off, reset, show cursor, leave alt screen
   }
 
   // ---- input parsing ----
@@ -227,6 +239,34 @@ export class TerminalDriver implements AppDriver {
     if (ch === '\x1b') {
       // escape sequences
       const rest = data.slice(i);
+      // Kitty query reply: CSI ? <flags> u — terminal supports the keyboard protocol.
+      const kreply = /^\x1b\[\?(\d*)u/.exec(rest);
+      if (kreply) {
+        setKittyKeyboard(true);
+        return { event: { key: '__kitty_ack', type: 'down' } as KeyEvent, next: i + kreply[0].length };
+      }
+      // Kitty key event: CSI <key>[:<alt>] ; <mod>:<evt> u — evt: 1=press 2=repeat 3=release.
+      // (with disambiguate, esc/enter/tab/backspace presses ALSO arrive in this form, evt omitted)
+      const kit = /^\x1b\[(\d+)(?::\d+)?(?:;(\d*)(?::(\d+))?)?u/.exec(rest);
+      if (kit) {
+        setKittyKeyboard(true); // receiving kitty-form events at all proves support (query may go unanswered)
+
+        const code = parseInt(kit[1], 10);
+        const evt = kit[3] ?? '1';
+        const m = mod((parseInt(kit[2] || '1', 10) || 1) - 1);
+        const name = KITTY_KEY_NAMES[code] ?? (code >= 32 && code < 127 ? String.fromCharCode(code) : undefined);
+        if (!name) return { event: { key: '__noop', type: 'down' } as KeyEvent, next: i + kit[0].length };
+        return { event: { key: name, type: evt === '3' ? 'up' : 'down', repeat: evt === '2', ...m } as KeyEvent, next: i + kit[0].length };
+      }
+      // Kitty arrow/legacy-key event: CSI 1;<mod>:<evt><ABCD etc> (repeat/release carry :2/:3).
+      const karrow = /^\x1b\[1;(\d*)(?::(\d+))?([ABCDHF])/.exec(rest);
+      if (karrow && karrow[2]) {
+        setKittyKeyboard(true); // kitty-form arrow event proves protocol support
+
+        const names: Record<string, string> = { A: 'up', B: 'down', C: 'right', D: 'left', H: 'home', F: 'end' };
+        const m = mod((parseInt(karrow[1] || '1', 10) || 1) - 1);
+        return { event: { key: names[karrow[3]], type: karrow[2] === '3' ? 'up' : 'down', repeat: karrow[2] === '2', ...m } as KeyEvent, next: i + karrow[0].length };
+      }
       // CSI: ESC [ <params> <final>
       const csi = /^\x1b\[([0-9;]*)([~A-Za-z])/.exec(rest);
       if (csi) {

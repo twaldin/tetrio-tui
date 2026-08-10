@@ -150,8 +150,9 @@ function sc(): StyleCaches {
   const ghostCell: Record<string, Style> = {};
   for (const k of PIECE_KEYS) {
     const c = p[k];
-    // 60% piece color on the board shade: clearly a shadow of THIS piece.
-    ghostCell[k] = { fg: shade(k === 'g' ? gc : c, 0.60), bg: t.boardA };
+    // FULL piece color on the board shade: the ▒ glyph's 50% density provides the
+    // translucency (darkening the fg too made ghosts read as board-colored holes).
+    ghostCell[k] = { fg: k === 'g' ? gc : c, bg: t.boardA };
   }
   ghostCell.ghost = { fg: shade(gc, 0.9), bg: t.boardA }; // type-less fallback
 

@@ -443,17 +443,25 @@ export function tick(engine: Engine, input: InputState): TickEvents {
   if (input.hold && !engine.prevInput.hold && !engine.holdLocked) {
     const current = f.type;
     if (engine.hold === null) {
+      // first hold: current piece parks, the NEXT queue piece spawns (queue advances once)
       engine.hold = current;
       spawnNext(engine);
     } else {
+      // hold SWAP: held piece becomes active, current parks — the queue does NOT advance.
+      // (Was popping spawnNext and discarding the popped piece: every swap ate a queue piece.)
       const held = engine.hold;
       engine.hold = current;
-      spawnNext(engine);
-      engine.falling!.type = held;
-      engine.falling!.x = spawnX(held, opts.boardwidth);
-      engine.falling!.y = -2;
-      engine.falling!.r = 0;
-      engine.falling!.hy = ghostY(board, held, engine.falling!.x, 0, 0);
+      const cells = PIECE_ROTATIONS[held][0];
+      const minCy = Math.min(...cells.map((c) => c[1]));
+      const swY = BUFFER_ROWS - 1 - minCy;
+      const swX = spawnX(held, opts.boardwidth);
+      engine.falling = { type: held, x: swX, y: swY, r: 0, locking: 0, lockresets: 0, rotresets: 0, safelock: 0 };
+      engine.falling.hy = ghostY(board, held, swX, swY, 0);
+      engine.state.falling = engine.falling;
+      if (collides(board, held, swX, swY, 0)) { // block-out on swap-in
+        engine.state.gameover = true;
+        engine.state.playing = false;
+      }
     }
     engine.holdLocked = !(opts.infinite_hold ?? false);
     engine.stats.holds++;

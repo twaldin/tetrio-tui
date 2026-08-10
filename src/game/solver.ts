@@ -355,10 +355,11 @@ function placementOptions(
 ): Option[] {
   const options: Option[] = [{ piece: falling, useHold: false, nextFalling: queue[0], nextHold: hold, advance: 1 }];
   if (canHold && !(falling === 'i' && canTetris(board))) {
-    // NOTE: the engine's hold-swap draws AND DISCARDS one bag piece (spawnNext inside
-    // the swap), so the piece after a swap is queue[1], not queue[0] — advance=2.
+    // TETR.IO hold semantics: a SWAP leaves the queue untouched (advance=1, next is
+    // queue[0]); a FIRST hold spawns queue[0] at swap time, so the piece after is
+    // queue[1] (advance=2).
     if (hold !== null && hold !== falling) {
-      options.push({ piece: hold, useHold: true, nextFalling: queue[1], nextHold: falling, advance: 2 });
+      options.push({ piece: hold, useHold: true, nextFalling: queue[0], nextHold: falling, advance: 1 });
     } else if (hold === null && queue[0] !== undefined && queue[0] !== falling) {
       options.push({ piece: queue[0], useHold: true, nextFalling: queue[1], nextHold: falling, advance: 2 });
     }

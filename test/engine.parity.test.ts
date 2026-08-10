@@ -211,3 +211,40 @@ describe('attack parity (versus table)', () => {
     expect(e.stats.garbage.attack).toBe(ATTACK_TABLE.tetris * 2 + ATTACK_TABLE.b2b_bonus); // 9
   });
 });
+
+
+describe('hold parity (TETR.IO semantics)', () => {
+  test('first hold parks the piece and spawns the next (queue advances once)', () => {
+    const e = newGame(42);
+    const first = e.falling!.type;
+    const next0 = e.state.bag[0];
+    press(e, { hold: true });
+    expect(e.hold).toBe(first);
+    expect(e.falling!.type).toBe(next0);
+    expect(e.holdLocked).toBe(true); // cannot hold again until a lock
+  });
+
+  test('hold swap exchanges hold<->active; the NEXT queue is UNTOUCHED', () => {
+    const e = newGame(42);
+    const first = e.falling!.type;
+    press(e, { hold: true });          // park first, spawn next
+    dropPiece(e);                       // lock -> hold unlocks; new piece spawns
+    const spawned = e.falling!.type;
+    const queueAfterLock = [...e.state.bag];
+    press(e, { hold: true });          // SWAP now
+    expect(e.hold).toBe(spawned);      // the current piece parked
+    expect(e.falling!.type).toBe(first); // the originally held piece is back in play
+    expect(e.state.bag).toEqual(queueAfterLock); // queue did NOT advance
+  });
+
+  test('holdLocked blocks a second hold until the next lock', () => {
+    const e = newGame(42);
+    press(e, { hold: true });
+    const afterFirst = e.falling!.type;
+    press(e, { hold: true });           // must be ignored (locked)
+    expect(e.falling!.type).toBe(afterFirst);
+    dropPiece(e);
+    press(e, { hold: true });           // works again after the lock
+    expect(e.holdLocked).toBe(true);
+  });
+});

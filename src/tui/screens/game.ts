@@ -365,7 +365,7 @@ export class GameScreen implements Screen {
     // main board: strong border + checkerboard interior
     drawBoardBorder(buf, boardX - 1, boardY - 1, boardW + 2, bh + 2, _s.borderBrightS);
     const ghostSet = computeGhostSet(s.falling);
-    drawBoard(buf, boardX, boardY, board, { ghostSet });
+    drawBoard(buf, boardX, boardY, board, { ghostSet, ghostType: s.falling?.type ?? null });
     // Draw the ACTIVE (falling) piece in full color — real TETR.IO shows it mid-fall.
     if (s.falling) {
       const style = pieceStyleDef();

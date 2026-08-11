@@ -28,7 +28,8 @@ export class TetrioApp {
   opponents: OpponentTracker;
   gameconn: GameConnection;
   private channelApi = new ChannelApi();
-  private configStore = new ConfigStore();
+  /** persisted config (public read for launch-flow decisions) */
+  readonly configStore = new ConfigStore();
 
   constructor(app: App, session: TetrioSession) {
     // debug dump set up in showHome

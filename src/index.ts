@@ -6,6 +6,8 @@ import { LoginScreen, type LoginResult } from './tui/screens/login.js';
 import { TetrioSession } from './net/session.js';
 import { TetrioApp } from './tui/main.js';
 import { setTheme, getThemeKey, loadUserThemes } from './tui/themes.js';
+import { StartupScreen } from './tui/screens/startup.js';
+import { AccountScreen } from './tui/screens/account.js';
 import { setPieceStyle } from './tui/pieceStyles.js';
 import { setBorderStyle } from './tui/draw.js';
 import { setMinimalMode } from './tui/renderPrefs.js';
@@ -27,19 +29,22 @@ function sessionFile(): string {
   const home = process.env.HOME ?? os.homedir();
   return path.join(process.env.XDG_CONFIG_HOME ?? path.join(home, '.config'), 'tetrio-tui', 'session.json');
 }
-function loadSavedSession(): { token: string; userid: string } | null {
+function loadSavedSession(): { token: string; userid: string; username?: string } | null {
   try {
     const d = JSON.parse(fs.readFileSync(sessionFile(), 'utf8'));
-    if (d?.token && d?.userid) return { token: d.token, userid: d.userid };
+    if (d?.token && d?.userid) return { token: d.token, userid: d.userid, username: d.username };
   } catch {}
   return null;
 }
-function saveSession(token: string, userid: string): void {
+function saveSession(token: string, userid: string, username?: string): void {
   try {
     const f = sessionFile();
     fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, JSON.stringify({ token, userid, savedAt: Date.now() }));
+    fs.writeFileSync(f, JSON.stringify({ token, userid, username: username ?? '', savedAt: Date.now() }));
   } catch {}
+}
+function clearSession(): void {
+  try { fs.rmSync(sessionFile(), { force: true }); } catch {}
 }
 
 async function main(): Promise<void> {
@@ -109,7 +114,7 @@ async function main(): Promise<void> {
         await session.loginAnonymous(login.username);
       }
       await session.connect();
-      if (session.api.token && session.userid) saveSession(session.api.token, session.userid); // persist login across sessions
+      if (session.api.token && session.userid) saveSession(session.api.token, session.userid, session.user?.user?.username); // persist login across sessions
       tetrioApp.showHome();
     } catch (e: any) {
       loginScreen.setError(String(e?.body?.error?.msg ?? e?.message ?? e));
@@ -132,12 +137,37 @@ async function main(): Promise<void> {
   } else if (guestIdx >= 0) {
     doConnect({ method: 'anonymous', username: args[guestIdx + 1] && !args[guestIdx + 1].startsWith('--') ? args[guestIdx + 1] : undefined });
   } else {
-    // resume a saved session token if present (login persists across sessions)
-    const saved = loadSavedSession();
-    if (saved) {
-      doConnect({ method: 'token', token: saved.token });
+    // Every launch lands on the ACCOUNT page (TETR.IO login page equivalent) —
+    // continue / switch / log out / guest / offline — after the startup animation.
+    const showAccount = () => {
+      const saved = loadSavedSession();
+      app.push(new AccountScreen({
+        savedUser: saved?.username || (saved?.userid ? `user ${saved.userid.slice(0, 8)}` : null),
+        onChoice: ({ action }) => {
+          if (action === 'continue') {
+            const s = loadSavedSession();
+            if (s) doConnect({ method: 'token', token: s.token });
+            else app.pop();
+          } else if (action === 'logout') {
+            clearSession();
+            app.pop();            // back to nothing -> push the account page fresh
+            app.push(loginScreen);
+          } else if (action === 'login') {
+            app.push(loginScreen);
+          } else if (action === 'guest') {
+            doConnect({ method: 'anonymous' });
+          } else {
+            // offline
+            tetrioApp.showHome();
+          }
+        },
+      }));
+    };
+    const cfg = tetrioApp.configStore.get();
+    if (cfg.video?.startupAnimation !== false) {
+      app.push(new StartupScreen(showAccount));
     } else {
-      app.push(loginScreen);
+      showAccount();
     }
   }
 }

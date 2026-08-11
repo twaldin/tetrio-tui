@@ -524,6 +524,11 @@ export function createVideoScreen(opts: ConfigScreenFactoryOpts): Screen {
       get: () => store.video.minimal,
       set: (v) => set({ minimal: v }),
     },
+    {
+      kind: 'toggle', label: 'STARTUP ANIMATION', hint: 'animated intro at launch (any key skips)',
+      get: () => store.video.startupAnimation,
+      set: (v) => set({ startupAnimation: v }),
+    },
     { kind: 'header', label: '' },
     {
       kind: 'action', label: 'RESET TO DEFAULTS', hint: 'effects on · truecolor · 60 fps · bevel', danger: true,

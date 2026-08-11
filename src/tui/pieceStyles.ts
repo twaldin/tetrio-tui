@@ -1,22 +1,24 @@
 /**
  * Piece-style system — pluggable mino renderers for the game board.
  *
- * Each style pre-caches its Style objects per theme (rebuilt only on theme
- * change) to avoid per-frame allocations. The active style is a module
- * singleton selected by config key.
+ * The core set is a 1-1 port of tetro-tui's (Strophox/tetro-tui) graphics presets
+ * (glyph tables from docs/TETRO_TUI_INspo.md), adapted to our per-mino model:
+ *  - ascii       — roguelike: locked `##`, player `[]`, ghost `::`, grid ` .`
+ *  - blocks      — UTF8 solids: locked `██`, player `▓▓`, ghost `░░`, grid ` ⢀`
+ *  - shiny       — guideline gloss: `Γ ` corner highlight on solid fill, ghost `░░`
+ *  - braille     — dot-matrix: locked `⣿⣿`, player `⣏⣹`, ghost `⠰⠆`, grid ` ⢀`
+ *  - nes         — NES simulacra: O/I/T = `▙▟`, S/Z/L/J = `Γ `, ghost `()`
+ *  - elektronika — soviet Elektronika-60: `▮▮` monochrome amber, ghost `▯▯`, grid ` .`
+ * Plus ours: bevel / flat / outline / gradient / halfblock.
  *
- * Styles:
- *  - bevel   (default) — TETR.IO-style raised block: subtle top highlight,
- *                         subtle bottom shadow, both cells identical → no stripes.
- *  - flat    — pure solid ██. Cleanest modern look.
- *  - outline — solid fill with dark separator line between rows.
- *  - gradient — more dramatic vertical gradient (top bright → bottom dark).
- *  - halfblock — slim minoes (▄: full-color bottom half, deep-shade top half
- *                of the SAME piece color): pieces read shorter and lighter
- *                (tetro-tui's ▀▄█ vertical-compression trick, per-mino).
- *  - shiny   — glossy "guideline" look via fg/bg inversion: a light-shade Γ
- *                corner glyph on a solid piece-color background (tetro-tui's
- *                `Γ ` shiny-blocks preset).
+ * COLOR RULE (user directive): the secondary shade in any style is a GENTLE,
+ * hue-preserving shift of the piece color (small luminance delta) — never a
+ * hard-contrast second color.
+ *
+ * Each style pre-caches its Style objects per theme (rebuilt only on theme
+ * change). Locked stack cells use drawLocked (defaults to drawMino); the
+ * falling piece and previews use drawMino (the "player" texture); the landing
+ * preview uses drawGhost.
  */
 import type { RenderBuffer, Style, RGB } from './app.js';
 import { theme, type Theme } from './themes.js';
@@ -55,268 +57,255 @@ const PIECE_KEYS = ['i', 'o', 't', 's', 'z', 'l', 'j', 'g'] as const;
 /** Draw one mino (2 chars wide × 1 row) at pixel position (px, py). */
 export type MinoDrawFn = (buf: RenderBuffer, px: number, py: number, type: string) => void;
 
-/** Draw one ghost mino (2 chars wide × 1 row) at pixel position (px, py). type = the falling piece's type (for piece-tinted ghosts). */
+/** Draw one ghost mino (2 chars wide × 1 row) at pixel position (px, py). type = the falling piece's type. */
 export type GhostDrawFn = (buf: RenderBuffer, px: number, py: number, type?: string) => void;
 
 export interface PieceStyleDef {
   readonly name: string;
   readonly label: string;
+  /** Active piece + previews ("player" texture in tetro-tui terms). */
   readonly drawMino: MinoDrawFn;
+  /** Locked stack cells. Defaults to drawMino when absent. */
+  readonly drawLocked?: MinoDrawFn;
   readonly drawGhost: GhostDrawFn;
+  /** Optional board empty-cell texture (tetro-tui's grid dot) — overrides the checkerboard. */
+  readonly grid?: { ch: string; fg: (t: Theme) => RGB };
 }
 
 // ---------------------------------------------------------------------------
 // Theme-cached style data — rebuilt only on theme change
 // ---------------------------------------------------------------------------
 
-interface BevelCache {
-  /** Both cells get the same style — no stripes. */
-  cell: Record<string, Style>;
-  ghost: Record<string, Style>;
-}
-
-interface FlatCache {
-  cell: Record<string, Style>;
-  ghost: Record<string, Style>;
-}
-
-interface OutlineCache {
-  cell: Record<string, Style>;
-  ghost: Record<string, Style>;
-}
-
-interface GradientCache {
-  cell: Record<string, Style>;
-  ghost: Record<string, Style>;
-}
-
-interface HalfblockCache {
-  cell: Record<string, Style>;
-  ghost: Record<string, Style>;
-}
-
-interface ShinyCache {
-  /** Corner glyph 'Γ' in a light tint on the solid piece color. */
-  corner: Record<string, Style>;
-  /** Solid fill ' ' in the piece color. */
-  fill: Record<string, Style>;
-  ghost: Record<string, Style>;
-}
-
-interface StyleCaches {
+interface Cache {
   _theme: Theme;
-  bevel: BevelCache;
-  flat: FlatCache;
-  outline: OutlineCache;
-  gradient: GradientCache;
-  halfblock: HalfblockCache;
-  shiny: ShinyCache;
+  /** per-piece: full color style */
+  solid: Record<string, Style>;
+  /** gentle light shade (cap/highlight) — hue-preserving */
+  lite: Record<string, Style>;
+  /** gentle dark shade — hue-preserving */
+  dark: Record<string, Style>;
+  /** deeper (but still hued) shade for player/locked split */
+  mid: Record<string, Style>;
+  /** ghost per piece (contrast-aware ▒) */
+  ghost: Record<string, Style>;
+  boardA: RGB;
+  gridFg: RGB;
 }
 
-let _sc: StyleCaches | null = null;
+let _sc: Cache | null = null;
 
-function sc(): StyleCaches {
+function sc(): Cache {
   const t = theme();
   if (_sc && _sc._theme === t) return _sc;
-
   const p = t.pieces;
-
-  const bevel_c: Record<string, Style> = {};
-  const flat_c: Record<string, Style> = {};
-  const outline_c: Record<string, Style> = {};
-  const gradient_c: Record<string, Style> = {};
-  const halfblock_c: Record<string, Style> = {};
-  const shiny_corner: Record<string, Style> = {};
-  const shiny_fill: Record<string, Style> = {};
-
+  const solid: Record<string, Style> = {};
+  const lite: Record<string, Style> = {};
+  const dark: Record<string, Style> = {};
+  const mid: Record<string, Style> = {};
+  const ghost: Record<string, Style> = {};
   for (const k of PIECE_KEYS) {
     const c = p[k];
-
-    // bevel: subtle raised block — top slightly brighter, bottom slightly darker.
-    // Both cells IDENTICAL → no vertical stripe. Subtle shading reads as 3D.
-    bevel_c[k] = { fg: tint(c, 0.12), bg: shade(c, 0.80) };
-
-    // flat: pure solid
-    flat_c[k] = { fg: c, bg: c };
-
-    // outline: solid fill with a mid-shade cap OF THE SAME HUE -> a readable
-    // separator stripe. (neutral near-black read as a hole in the piece)
-    outline_c[k] = { fg: c, bg: shade(c, 0.55) };
-
-    // gradient: dramatic vertical gradient (top very bright → bottom darker;
-    // 0.62 keeps dark pieces (dracula J, blues) above board brightness)
-    gradient_c[k] = { fg: tint(c, 0.30), bg: shade(c, 0.62) };
-
-    // halfblock: ▄ — bottom half full color, top half a medium shade of the piece
-    // (solid-but-slim; deep/black caps read as "half the color is missing")
-    halfblock_c[k] = { fg: c, bg: shade(c, 0.42) };
-
-    // shiny: Γ corner highlight (light tint) on solid piece color
-    shiny_corner[k] = { fg: tint(c, 0.55), bg: c };
-    shiny_fill[k] = { fg: c, bg: c };
-  }
-
-  // Ghost cells: piece-TINTED so the landing preview reads on every theme.
-  // (Was theme.ghost gray at ~15% luminance — invisible on dark boards.)
-  const gc = p.ghost;
-  const ghostCell: Record<string, Style> = {};
-  for (const k of PIECE_KEYS) {
-    const c = p[k];
-    // FULL piece color on the board shade: the ▒ glyph's 50% density provides the
-    // translucency. Dark hues are tinted up until the AVERAGE (50% blend) still
-    // separates from the board — otherwise dark-blue ghosts read as board holes.
-    let gcol = k === 'g' ? gc : tint(c, 0.15);
+    solid[k] = { fg: c, bg: c };
+    lite[k] = { fg: tint(c, 0.14), bg: shade(c, 0.86) };   // gentle bevel pair
+    mid[k] = { fg: shade(c, 0.72), bg: c };                 // ▓-style: 72% fg on solid bg
+    dark[k] = { fg: c, bg: shade(c, 0.60) };                // gentle cap
+    // ghost: ▒ density does the translucency; tint up until the blend separates from boardA
+    let gcol = k === 'g' ? p.ghost : tint(c, 0.15);
     const blend = (fg: RGB): RGB => [Math.round((fg[0] + t.boardA[0]) / 2), Math.round((fg[1] + t.boardA[1]) / 2), Math.round((fg[2] + t.boardA[2]) / 2)];
     let guard = 0;
     while (contrastRatio(blend(gcol), t.boardA) < 1.5 && guard++ < 6) gcol = tint(gcol, 0.15);
-    ghostCell[k] = { fg: gcol, bg: t.boardA };
+    ghost[k] = { fg: gcol, bg: t.boardA };
   }
-  ghostCell.ghost = { fg: shade(gc, 0.9), bg: t.boardA }; // type-less fallback
-
-  _sc = {
-    _theme: t,
-    bevel: { cell: bevel_c, ghost: ghostCell },
-    flat: { cell: flat_c, ghost: ghostCell },
-    outline: { cell: outline_c, ghost: ghostCell },
-    gradient: { cell: gradient_c, ghost: ghostCell },
-    halfblock: { cell: halfblock_c, ghost: ghostCell },
-    shiny: { corner: shiny_corner, fill: shiny_fill, ghost: ghostCell },
-  };
+  ghost.ghost = { fg: shade(p.ghost, 1.2), bg: t.boardA };
+  _sc = { _theme: t, solid, lite, dark, mid, ghost, boardA: t.boardA, gridFg: t.gridLine };
   return _sc;
 }
 
+const get = (rec: Record<string, Style>, type?: string) => rec[type ?? 'ghost'] ?? rec.ghost ?? rec.g;
+
 // ---------------------------------------------------------------------------
-// Style implementations
+// tetro-tui 1-1 presets
 // ---------------------------------------------------------------------------
 
-/**
- * Bevel — TETR.IO-style raised block.
- *
- * Uses ▀ (upper half block): fg = highlight → top edge bright,
- * bg = shadow → bottom edge dark. BOTH cells use the SAME style,
- * so there are zero vertical stripes. Between vertically stacked
- * minoes the shadow/highlight boundary creates a subtle 3D separator.
- */
-const BEVEL: PieceStyleDef = {
-  name: 'bevel',
-  label: 'Bevel',
+/** ascii — locked `##`, player `[]`, ghost `::`, grid ` .` (tetro-tui preset 1). */
+const ASCII: PieceStyleDef = {
+  name: 'ascii', label: 'ASCII',
   drawMino(buf, px, py, type) {
-    const s = sc().bevel.cell[type] ?? sc().bevel.cell.g;
-    buf.set(px, py, '\u2580', s);       // ▀
-    buf.set(px + 1, py, '\u2580', s);   // ▀
+    const c = sc();
+    const s = { fg: get(c.solid, type).fg };
+    buf.set(px, py, '[', s); buf.set(px + 1, py, ']', s);
+  },
+  drawLocked(buf, px, py, type) {
+    const c = sc();
+    const s = { fg: get(c.mid, type).fg }; // locked slightly dimmer than the player
+    buf.set(px, py, '#', s); buf.set(px + 1, py, '#', s);
   },
   drawGhost(buf, px, py, type) {
-    const g = sc().bevel.ghost;
-    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
-    buf.set(px, py, '\u2592', s);       // ▒
-    buf.set(px + 1, py, '\u2592', s);   // ▒
+    const s = get(sc().ghost, type);
+    buf.set(px, py, ':', s); buf.set(px + 1, py, ':', s);
   },
+  grid: { ch: '.', fg: (t) => t.gridLine },
 };
 
-/** Flat — pure solid ██. Cleanest modern look, no shading at all. */
-const FLAT: PieceStyleDef = {
-  name: 'flat',
-  label: 'Flat',
+/** blocks — locked `██`, player `▓▓`, ghost `░░`, grid ` ⢀` (tetro-tui preset 2). */
+const BLOCKS: PieceStyleDef = {
+  name: 'blocks', label: 'Blocks',
   drawMino(buf, px, py, type) {
-    const s = sc().flat.cell[type] ?? sc().flat.cell.g;
-    buf.set(px, py, '\u2588', s);       // █
-    buf.set(px + 1, py, '\u2588', s);   // █
+    const s = get(sc().mid, type); // ▓▓: 72% piece on solid piece bg — gentle player shade
+    buf.set(px, py, '\u2593', s); buf.set(px + 1, py, '\u2593', s);
+  },
+  drawLocked(buf, px, py, type) {
+    const s = get(sc().solid, type);
+    buf.set(px, py, '\u2588', s); buf.set(px + 1, py, '\u2588', s);
   },
   drawGhost(buf, px, py, type) {
-    const g = sc().flat.ghost;
-    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
-    buf.set(px, py, '\u2592', s);       // ▒
-    buf.set(px + 1, py, '\u2592', s);   // ▒
+    const s = get(sc().ghost, type);
+    buf.set(px, py, '\u2591', s); buf.set(px + 1, py, '\u2591', s);
   },
+  grid: { ch: '\u2880', fg: (t) => t.gridLine }, // ⢀
 };
 
-/**
- * Outline — solid fill with a dark separator line on top of each row.
- *
- * Uses ▄ (lower half block): fg = piece color (bottom half solid),
- * bg = dark outline (top half dark). Between stacked minoes:
- *   upper row bottom = solid color
- *   lower row top    = dark outline
- * → visible dark separator line between every row of blocks.
- */
-const OUTLINE: PieceStyleDef = {
-  name: 'outline',
-  label: 'Outline',
-  drawMino(buf, px, py, type) {
-    const s = sc().outline.cell[type] ?? sc().outline.cell.g;
-    buf.set(px, py, '\u2584', s);       // ▄
-    buf.set(px + 1, py, '\u2584', s);   // ▄
-  },
-  drawGhost(buf, px, py, type) {
-    const g = sc().outline.ghost;
-    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
-    buf.set(px, py, '\u2592', s);       // ▒
-    buf.set(px + 1, py, '\u2592', s);   // ▒
-  },
-};
-
-/**
- * Gradient — dramatic vertical gradient within each mino.
- * Top half bright, bottom half dark. More contrast than bevel.
- * Both cells identical → no stripes.
- */
-const GRADIENT: PieceStyleDef = {
-  name: 'gradient',
-  label: 'Gradient',
-  drawMino(buf, px, py, type) {
-    const s = sc().gradient.cell[type] ?? sc().gradient.cell.g;
-    buf.set(px, py, '\u2580', s);       // ▀
-    buf.set(px + 1, py, '\u2580', s);   // ▀
-  },
-  drawGhost(buf, px, py, type) {
-    const g = sc().gradient.ghost;
-    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
-    buf.set(px, py, '\u2592', s);       // ▒
-    buf.set(px + 1, py, '\u2592', s);   // ▒
-  },
-};
-
-/**
- * Halfblock — ▄ with the board shade on top: every mino reads as only the
- * bottom half of its terminal row (tetro-tui's vertical-compression look,
- * adapted to per-mino rendering). Stacks look slimmer; gaps read clearer.
- */
-const HALFBLOCK: PieceStyleDef = {
-  name: 'halfblock',
-  label: 'Half-block',
-  drawMino(buf, px, py, type) {
-    const s = sc().halfblock.cell[type] ?? sc().halfblock.cell.g;
-    buf.set(px, py, '\u2584', s);       // ▄
-    buf.set(px + 1, py, '\u2584', s);   // ▄
-  },
-  drawGhost(buf, px, py, type) {
-    const g = sc().halfblock.ghost;
-    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
-    buf.set(px, py, '\u2592', s);       // ▒
-    buf.set(px + 1, py, '\u2592', s);   // ▒
-  },
-};
-
-/**
- * Shiny — glossy "guideline" look (tetro-tui's `Γ ` shiny-blocks preset):
- * a light corner glyph on the solid piece color. fg/bg inversion does all
- * the work — the Γ reads as a top-left bevel highlight.
- */
+/** shiny — `Γ ` glossy corner on solid fill (tetro-tui preset 3), ghost `░░`. */
 const SHINY: PieceStyleDef = {
-  name: 'shiny',
-  label: 'Shiny',
+  name: 'shiny', label: 'Shiny',
   drawMino(buf, px, py, type) {
-    const c = sc().shiny;
-    const corner = c.corner[type] ?? c.corner.g;
-    const fill = c.fill[type] ?? c.fill.g;
-    buf.set(px, py, '\u0393', corner);       // Γ
-    buf.set(px + 1, py, ' ', fill);           // solid
+    const c = sc();
+    const base = get(c.solid, type).fg!;
+    // gentle highlight: a light tint of the SAME hue for the corner glyph
+    buf.set(px, py, '\u0393', { fg: tint(base, 0.30), bg: base });   // Γ
+    buf.set(px + 1, py, ' ', { fg: base, bg: base });
   },
   drawGhost(buf, px, py, type) {
-    const g = sc().shiny.ghost;
-    const s = g[type ?? 'ghost'] ?? g.ghost ?? g.g;
-    buf.set(px, py, '\u2592', s);       // ▒
-    buf.set(px + 1, py, '\u2592', s);   // ▒
+    const s = get(sc().ghost, type);
+    buf.set(px, py, '\u2591', s); buf.set(px + 1, py, '\u2591', s);
+  },
+};
+
+/** braille — locked `⣿⣿`, player `⣏⣹`, ghost `⠰⠆`, grid ` ⢀` (tetro-tui preset 4). */
+const BRAILLE: PieceStyleDef = {
+  name: 'braille', label: 'Braille',
+  drawMino(buf, px, py, type) {
+    const s = { fg: get(sc().solid, type).fg };
+    buf.set(px, py, '\u28CF', s); buf.set(px + 1, py, '\u28F9', s); // ⣏⣹
+  },
+  drawLocked(buf, px, py, type) {
+    const s = { fg: get(sc().mid, type).fg };
+    buf.set(px, py, '\u28FF', s); buf.set(px + 1, py, '\u28FF', s); // ⣿⣿
+  },
+  drawGhost(buf, px, py, type) {
+    const s = get(sc().ghost, type);
+    buf.set(px, py, '\u2830', s); buf.set(px + 1, py, '\u2806', s); // ⠰⠆
+  },
+  grid: { ch: '\u2880', fg: (t) => t.gridLine },
+};
+
+/** nes — O/I/T = `▙▟`, S/Z/L/J = `Γ `, ghost `()` (tetro-tui preset 5, two-tone). */
+const NES: PieceStyleDef = {
+  name: 'nes', label: 'NES',
+  drawMino(buf, px, py, type) {
+    const c = sc();
+    const base = get(c.solid, type).fg!;
+    if (type === 'o' || type === 'i' || type === 't') {
+      // chunky bottom-corner blocks: gentle dark fg on solid piece bg
+      buf.set(px, py, '\u2599', { fg: shade(base, 0.62), bg: base }); // ▙
+      buf.set(px + 1, py, '\u259F', { fg: shade(base, 0.62), bg: base }); // ▟
+    } else {
+      buf.set(px, py, '\u0393', { fg: tint(base, 0.28), bg: base }); // Γ
+      buf.set(px + 1, py, ' ', { fg: base, bg: base });
+    }
+  },
+  drawGhost(buf, px, py, type) {
+    const s = get(sc().ghost, type);
+    buf.set(px, py, '(', s); buf.set(px + 1, py, ')', s);
+  },
+  grid: { ch: '.', fg: (t) => t.gridLine },
+};
+
+/** elektronika — `▮▮` monochrome amber, ghost `▯▯`, grid ` .` (tetro-tui preset 6). */
+const ELEKTRONIKA: PieceStyleDef = {
+  name: 'elektronika', label: 'Elektronika-60',
+  drawMino(buf, px, py) {
+    const amber: RGB = [255, 176, 0];
+    buf.set(px, py, '\u25AE', { fg: amber }); buf.set(px + 1, py, '\u25AE', { fg: amber }); // ▮▮
+  },
+  drawGhost(buf, px, py) {
+    const amber: RGB = [140, 102, 20];
+    buf.set(px, py, '\u25AF', { fg: amber }); buf.set(px + 1, py, '\u25AF', { fg: amber }); // ▯▯
+  },
+  grid: { ch: '.', fg: () => [80, 62, 20] },
+};
+
+// ---------------------------------------------------------------------------
+// Our styles (retuned to the gentle-color rule)
+// ---------------------------------------------------------------------------
+
+/** bevel — subtle raised block: gentle light top / gentle dark bottom, same hue. */
+const BEVEL: PieceStyleDef = {
+  name: 'bevel', label: 'Bevel',
+  drawMino(buf, px, py, type) {
+    const s = get(sc().lite, type);
+    buf.set(px, py, '\u2580', s); buf.set(px + 1, py, '\u2580', s); // ▀
+  },
+  drawGhost(buf, px, py, type) {
+    const s = get(sc().ghost, type);
+    buf.set(px, py, '\u2592', s); buf.set(px + 1, py, '\u2592', s);
+  },
+};
+
+/** flat — pure solid ██, no shading. */
+const FLAT: PieceStyleDef = {
+  name: 'flat', label: 'Flat',
+  drawMino(buf, px, py, type) {
+    const s = get(sc().solid, type);
+    buf.set(px, py, '\u2588', s); buf.set(px + 1, py, '\u2588', s);
+  },
+  drawGhost(buf, px, py, type) {
+    const s = get(sc().ghost, type);
+    buf.set(px, py, '\u2592', s); buf.set(px + 1, py, '\u2592', s);
+  },
+};
+
+/** outline — solid fill with a gentle same-hue cap stripe. */
+const OUTLINE: PieceStyleDef = {
+  name: 'outline', label: 'Outline',
+  drawMino(buf, px, py, type) {
+    const c = sc();
+    const s = { fg: get(c.solid, type).fg, bg: shade(get(c.solid, type).fg!, 0.68) };
+    buf.set(px, py, '\u2584', s); buf.set(px + 1, py, '\u2584', s); // ▄
+  },
+  drawGhost(buf, px, py, type) {
+    const s = get(sc().ghost, type);
+    buf.set(px, py, '\u2592', s); buf.set(px + 1, py, '\u2592', s);
+  },
+};
+
+/** gradient — gentle vertical gradient (light top → mid bottom), same hue. */
+const GRADIENT: PieceStyleDef = {
+  name: 'gradient', label: 'Gradient',
+  drawMino(buf, px, py, type) {
+    const c = sc();
+    const base = get(c.solid, type).fg!;
+    const s = { fg: tint(base, 0.20), bg: shade(base, 0.72) };
+    buf.set(px, py, '\u2580', s); buf.set(px + 1, py, '\u2580', s); // ▀
+  },
+  drawGhost(buf, px, py, type) {
+    const s = get(sc().ghost, type);
+    buf.set(px, py, '\u2592', s); buf.set(px + 1, py, '\u2592', s);
+  },
+};
+
+/** halfblock — slim minoes: full color bottom, gentle hued cap. */
+const HALFBLOCK: PieceStyleDef = {
+  name: 'halfblock', label: 'Half-block',
+  drawMino(buf, px, py, type) {
+    const c = sc();
+    const base = get(c.solid, type).fg!;
+    const s = { fg: base, bg: shade(base, 0.55) };
+    buf.set(px, py, '\u2584', s); buf.set(px + 1, py, '\u2584', s); // ▄
+  },
+  drawGhost(buf, px, py, type) {
+    const s = get(sc().ghost, type);
+    buf.set(px, py, '\u2592', s); buf.set(px + 1, py, '\u2592', s);
   },
 };
 
@@ -327,10 +316,15 @@ const SHINY: PieceStyleDef = {
 export const PIECE_STYLES: Record<string, PieceStyleDef> = {
   bevel: BEVEL,
   flat: FLAT,
+  blocks: BLOCKS,
+  shiny: SHINY,
   outline: OUTLINE,
   gradient: GRADIENT,
   halfblock: HALFBLOCK,
-  shiny: SHINY,
+  ascii: ASCII,
+  braille: BRAILLE,
+  nes: NES,
+  elektronika: ELEKTRONIKA,
 };
 
 /** Ordered list of style keys for cycling in the config UI. */
@@ -354,8 +348,21 @@ export function setPieceStyle(key: string): boolean {
   return true;
 }
 
-/** The current style key (e.g. 'bevel', 'flat'). */
+/** The current style key (e.g. 'bevel', 'blocks'). */
 export function getPieceStyleKey(): string { return _activeKey; }
 
 /** The live style definition. Safe to call in hot render paths (no allocation). */
 export function pieceStyleDef(): PieceStyleDef { return _active; }
+
+/** Locked-stack mino renderer for the active style (falls back to drawMino). */
+export function drawLockedMino(buf: RenderBuffer, px: number, py: number, type: string): void {
+  const s = _active;
+  (s.drawLocked ?? s.drawMino)(buf, px, py, type);
+}
+
+/** Board empty-cell texture for the active style (null = keep the checkerboard). */
+export function styleGrid(): { ch: string; fg: RGB } | null {
+  const g = _active.grid;
+  if (!g) return null;
+  return { ch: g.ch, fg: g.fg(theme()) };
+}

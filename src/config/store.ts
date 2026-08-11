@@ -69,6 +69,7 @@ export interface VideoConfig {
   theme: string;          // the color theme key (tetrio, catppuccin, ...)
   pieceStyle: string;     // piece rendering style (bevel, flat, outline, gradient, halfblock, shiny)
   borderStyle: string;    // panel/board border style (rounded, double, single, heavy, none)
+  startupAnimation: boolean; // animated intro at launch (solver gameplay, cycling themes)
 }
 
 export interface AudioConfig {
@@ -135,7 +136,7 @@ export function defaultConfig(): Config {
     version: CONFIG_VERSION,
     handling: defaultHandling(),
     keybinds: defaultKeybinds(),
-    video: { effects: true, minimal: false, colorMode: 'truecolor', targetFps: 60, theme: 'tetrio', pieceStyle: 'bevel', borderStyle: 'rounded' },
+    video: { effects: true, minimal: false, colorMode: 'truecolor', targetFps: 60, theme: 'tetrio', pieceStyle: 'bevel', borderStyle: 'rounded', startupAnimation: true },
     audio: { music: 100, sfx: 100 },
     account: { lastUsername: '' },
   };
@@ -327,6 +328,7 @@ export function sanitizeVideo(input: unknown): VideoConfig {
     theme: typeof o.theme === 'string' ? o.theme : d.theme,
     pieceStyle: typeof o.pieceStyle === 'string' ? o.pieceStyle : d.pieceStyle,
     borderStyle: typeof o.borderStyle === 'string' ? o.borderStyle : d.borderStyle,
+    startupAnimation: asBool(o.startupAnimation, d.startupAnimation),
   };
 }
 

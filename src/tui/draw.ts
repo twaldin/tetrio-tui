@@ -2,7 +2,7 @@
 import type { BoardGrid, Cell, PieceType } from '../types.js';
 import type { RenderBuffer, Style, RGB } from './app.js';
 import { theme, type Theme } from './themes.js';
-import { pieceStyleDef } from './pieceStyles.js';
+import { pieceStyleDef, styleGrid } from './pieceStyles.js';
 
 // ---------------------------------------------------------------------------
 // Re-export a THEME proxy so existing `import { THEME } from './draw.js'`
@@ -74,15 +74,21 @@ export function drawBoard(
   const gtype = opts.ghostType ?? 'ghost';
   const c = bc();
   const style = pieceStyleDef();
+  const gridTex = styleGrid();
   for (let row = 0; row < h; row++) {
     for (let col = 0; col < w; col++) {
       const cell = grid[row][col];
       const px = x + col * 2;
       const py = y + row;
       if (cell) {
-        style.drawMino(buf, px, py, cell);
+        // locked stack cells use the style's "locked" texture (tetro-tui 1-1); active/preview use drawMino
+        (style.drawLocked ?? style.drawMino)(buf, px, py, cell);
       } else if (gs && gs.has(row * 256 + col)) {
         style.drawGhost(buf, px, py, gtype);
+      } else if (gridTex) {
+        // style-defined grid texture (tetro-tui's grid dot) replaces the checkerboard
+        buf.set(px, py, gridTex.ch, { fg: gridTex.fg });
+        buf.set(px + 1, py, ' ', c.ea);
       } else {
         const s = (row + col) % 2 === 0 ? c.ea : c.eb;
         buf.set(px, py, ' ', s);

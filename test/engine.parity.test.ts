@@ -341,3 +341,75 @@ describe('handling flags parity (TETR.IO)', () => {
     expect(f.x).toBeGreaterThan(x0 + 1);
   });
 });
+
+
+describe('B2B chain rules (TETR.IO)', () => {
+  function stackWell(e: any, cols = 9) {
+    const board = e.state.board;
+    for (let y = board.length - 4; y < board.length; y++)
+      for (let x = 0; x < cols; x++) board[y][x] = 'g';
+  }
+  function dropI(e: any) {
+    const minCxV = Math.min(...PIECE_ROTATIONS.i[1].map(([cx]) => cx));
+    const f = e.falling!;
+    f.type = 'i'; f.r = 1; f.x = 9 - minCxV; f.y = 0;
+    press(e, { hardDrop: true });
+  }
+
+  test('quad chains; single breaks; chain survives across the whole game', () => {
+    const e = newGame(5);
+    stackWell(e); dropI(e);
+    expect(e.btb).toBe(1);
+    stackWell(e); dropI(e);
+    expect(e.btb).toBe(2);
+    // now a single: craft bottom row missing col 0, drop a vertical I at col 0
+    const board = e.state.board;
+    for (let x = 1; x < 10; x++) board[board.length - 1][x] = 'g';
+    const minCxV = Math.min(...PIECE_ROTATIONS.i[1].map(([cx]) => cx));
+    const f = e.falling!;
+    f.type = 'i'; f.r = 1; f.x = 0 - minCxV; f.y = 0;
+    press(e, { hardDrop: true });
+    expect(e.stats.lines).toBeGreaterThan(0);
+    expect(e.btb).toBe(0); // single broke the chain
+  });
+
+  test('a full T-spin DOUBLE keeps the chain (t-spins count for b2b)', () => {
+    const e = newGame(5);
+    const board = e.state.board;
+    const b = board.length - 1;
+    // TSD pocket (T r2 = bar at relative row 1, stem at row 2): T at y=b-2 puts
+    // the bar in row b-1 and the stem in row b. Row b-1 filled except cols 3,4,5;
+    // row b filled except col 4. Both flat-side (top) corners roofed for FULL spin.
+    for (let x = 0; x < 10; x++) if (x < 3 || x > 5) board[b - 1][x] = 'g';
+    for (let x = 0; x < 10; x++) if (x !== 4) board[b][x] = 'g';
+    board[b - 2][3] = 'g'; board[b - 2][5] = 'g';
+    // place the T (pointing down, r=2) directly in the pocket, flagged as just-rotated
+    const f = e.falling!;
+    f.type = 't'; f.x = 3; f.r = 2; f.y = b - 2;
+    f.hy = f.y;
+    e.rotatingSystem = true; // last action was a rotation (T-spin detection condition)
+    // grounded: lock via lock delay
+    for (let i = 0; i < 60 && e.stats.tspins === 0; i++) tick(e, NEUTRAL);
+    expect(e.stats.tspins).toBe(1);
+    expect(e.stats.lines).toBe(2);
+    expect(e.btb).toBe(1); // full t-spin kept/incremented the chain
+  });
+
+  test('0-line full T-spin also counts (chain increments without lines)', () => {
+    const e = newGame(5);
+    const board = e.state.board;
+    const b = board.length - 1;
+    // full-spin pocket with NO line clears: T (r2) at y=b-2 -> bar row b-1, stem (4,b).
+    // full spin needs BOTH flat-side (top) corners + 3 total: roof both, fill (3,b) & (5,b).
+    board[b][3] = 'g'; board[b][5] = 'g';        // bottom corners
+    board[b - 2][3] = 'g'; board[b - 2][5] = 'g'; // top (flat-side) corners -> full
+    const f = e.falling!;
+    f.type = 't'; f.x = 3; f.r = 2; f.y = b - 2;
+    f.hy = f.y;
+    e.rotatingSystem = true;
+    for (let i = 0; i < 60 && e.stats.tspins === 0; i++) tick(e, NEUTRAL);
+    expect(e.stats.tspins).toBe(1);
+    expect(e.stats.lines).toBe(0);
+    expect(e.btb).toBe(1);
+  });
+});

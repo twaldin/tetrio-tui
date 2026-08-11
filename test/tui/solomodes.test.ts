@@ -14,14 +14,14 @@ const ptyTest = PTY ? test : test.skip;
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 
-function launch(): Promise<Session> {
+function launch(extraEnv: Record<string, string> = {}): Promise<Session> {
   return launchTerminal({
     command: process.execPath,
     args: ['--import', 'tsx', path.join('src', 'index.ts'), '--offline'],
     cols: 100,
     rows: 34,
     cwd: projectRoot,
-    env: { COLORTERM: 'truecolor', FORCE_COLOR: undefined, NO_COLOR: undefined, TUI_SEED: '4242' },
+    env: { COLORTERM: 'truecolor', FORCE_COLOR: undefined, NO_COLOR: undefined, TUI_SEED: '4242', ...extraEnv },
   });
 }
 
@@ -108,6 +108,25 @@ ptyTest('ZEN + PRACTICE: launch and play', async () => {
     } finally {
       term.killProcess();
     }
+  }
+});
+
+ptyTest('B2B indicator appears and PERSISTS during an all-quad autoplay game', async () => {
+  const term = await launch({ TUI_AUTOPLAY: '1' });
+  try {
+    await intoSolo(term, '40l');
+    // the solver chains quads — poll until the chain is alive and STAYS alive
+    let saw = 0;
+    for (let i = 0; i < 120; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      const txt = await term.text({ immediate: true });
+      const m = txt.match(/B2B\s+x(\d+)/);
+      if (m && parseInt(m[1], 10) >= 1) saw++;
+      if (saw >= 8) break; // persisted across 8 consecutive polls (~2s)
+    }
+    expect(saw).toBeGreaterThanOrEqual(8);
+  } finally {
+    term.killProcess();
   }
 });
 

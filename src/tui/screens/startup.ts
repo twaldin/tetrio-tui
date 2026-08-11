@@ -13,6 +13,10 @@ import { bestMove } from '../../game/solver.js';
 
 const NEUTRAL: InputState = { left: false, right: false, softDrop: false, hardDrop: false, rotCW: false, rotCCW: false, rot180: false, hold: false };
 
+/** How often the intro cycles theme + piece style. The solver is good enough
+ *  that one game can run effectively forever, so game-over alone never cycles. */
+const CYCLE_MS = 5000;
+
 export class StartupScreen implements Screen {
   readonly name = 'startup';
   private engine: Engine;
@@ -23,6 +27,7 @@ export class StartupScreen implements Screen {
   private savedTheme: string;
   private savedStyle: string;
   private cycleIdx = 0;
+  private cycleMs = 0;
 
   constructor(onDone: () => void, seed = 20260810) {
     this.onDone = onDone;
@@ -40,19 +45,30 @@ export class StartupScreen implements Screen {
     this.onDone();
   }
 
+  private cycleTheme(): void {
+    const keys = themeKeys();
+    this.cycleIdx = (this.cycleIdx + 1) % keys.length;
+    setTheme(keys[this.cycleIdx]);
+    setPieceStyle(PIECE_STYLE_KEYS[this.cycleIdx % PIECE_STYLE_KEYS.length]);
+  }
+
   update(dtMs: number): void {
     this.frame++;
+    this.cycleMs += dtMs;
     // ~2 engine ticks per render frame at 60fps, turbo placement every other tick
     const e = this.engine;
     if (!e.state.playing || e.state.gameover) {
       // restart a fresh game with a new seed, and CYCLE theme + piece style
-      const keys = themeKeys();
-      this.cycleIdx = (this.cycleIdx + 1) % keys.length;
-      setTheme(keys[this.cycleIdx]);
-      setPieceStyle(PIECE_STYLE_KEYS[this.cycleIdx % PIECE_STYLE_KEYS.length]);
+      this.cycleTheme();
+      this.cycleMs = 0;
       this.engine = createGame({ boardwidth: 10, boardheight: 20, g: 0.02, locktime: 20 } as any, (Date.now() % 0x7ffffffe) + 1);
       startGame(this.engine);
       return;
+    }
+    // time-based cycling — game-over alone never fires (the solver survives)
+    if (this.cycleMs >= CYCLE_MS) {
+      this.cycleMs = 0;
+      this.cycleTheme();
     }
     // solver drive (turbo): place every other tick
     if (this.frame % 2 === 0) {

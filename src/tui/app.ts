@@ -97,6 +97,8 @@ export class App {
     this.push(screen);
   }
   top(): Screen | undefined { return this.stack[this.stack.length - 1]; }
+  /** Number of screens on the stack. */
+  get size(): number { return this.stack.length; }
 
   private handleKey(ev: KeyEvent): void {
     this.top()?.onKey?.(ev);

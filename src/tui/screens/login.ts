@@ -21,9 +21,11 @@ export class LoginScreen implements Screen {
   private busy = false;
   private error = '';
   private onSubmit: (r: LoginResult) => void;
+  private onCancel?: () => void;
 
-  constructor(onSubmit: (r: LoginResult) => void) {
+  constructor(onSubmit: (r: LoginResult) => void, onCancel?: () => void) {
     this.onSubmit = onSubmit;
+    this.onCancel = onCancel;
   }
 
   private fieldList(): FieldId[] {
@@ -35,6 +37,9 @@ export class LoginScreen implements Screen {
     const fields = this.fieldList();
     if (ev.type !== 'down') return;
     switch (ev.key) {
+      case 'escape':
+        this.onCancel?.();
+        break;
       case 'tab':
       case 'down':
         this.focusIdx = (this.focusIdx + 1) % (fields.length + 1);

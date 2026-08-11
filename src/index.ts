@@ -118,11 +118,19 @@ async function main(): Promise<void> {
       tetrioApp.showHome();
     } catch (e: any) {
       loginScreen.setError(String(e?.body?.error?.msg ?? e?.message ?? e));
+      // Surface the failure — CONTINUE AS / --token land here without the login
+      // form on screen, so an error set on the hidden login screen is invisible.
+      if (app.top() !== loginScreen) app.push(loginScreen);
       app.requestRender();
     }
   };
 
-  const loginScreen = new LoginScreen(doConnect);
+  const loginScreen = new LoginScreen(doConnect, () => {
+    // esc on the login form: back to the account page when it's underneath, else quit
+    if (app.top() !== loginScreen) return;
+    if (app.size > 1) app.pop();
+    else shutdown(0);
+  });
   session.on('error', () => app.requestRender());
 
   driver.start();
@@ -141,7 +149,9 @@ async function main(): Promise<void> {
     // continue / switch / log out / guest / offline — after the startup animation.
     const showAccount = () => {
       const saved = loadSavedSession();
-      app.push(new AccountScreen({
+      // replace (not push): the account page is the flow root — nothing (in
+      // particular not the finished startup screen) should sit beneath it
+      app.replace(new AccountScreen({
         savedUser: saved?.username || (saved?.userid ? `user ${saved.userid.slice(0, 8)}` : null),
         onChoice: ({ action }) => {
           if (action === 'continue') {

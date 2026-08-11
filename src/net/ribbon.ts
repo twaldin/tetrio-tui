@@ -8,7 +8,7 @@ import * as theorypack from './theorypack.js';
 import {
   F_ID, CODE_MASK,
   CODE_NEW, CODE_DIE, CODE_PING, CODE_SESSION, CODE_PACKETS,
-  CODE_KICK, CODE_NOPE, CODE_PNI, CODE_NOTIFY, CODE_GENERIC,
+  CODE_KICK, CODE_NOPE, CODE_PNI, CODE_NOTIFY, CODE_GENERIC, CODE_REJECTED, CODE_RELOAD,
   GENERIC_CODES, GENERIC_NAMES, KICK_REASONS, NOPE_REASONS, PNI_TYPES, NOTIFY_TYPES,
 } from './commands.js';
 
@@ -71,8 +71,14 @@ export function decodePacket(buf: Uint8Array): RibbonMessage {
       try { data = theorypack.unpack(payload.subarray(1)); } catch (e) { data = { _unpackError: String(e), _raw: Buffer.from(payload.subarray(1)).toString('hex') }; }
       return { command, id, data };
     }
+    case CODE_REJECTED:
+      // informational only (the web client just flags the connection 'BAD'); never fatal
+      return { command: 'rejected', id, data: { raw: Buffer.from(payload).toString('hex') } };
+    case CODE_RELOAD:
+      return { command: 'reload', id, data: { raw: Buffer.from(payload).toString('hex') } };
     default:
-      throw new Error(`unknown ribbon code 0x${code.toString(16)}`);
+      // Unknown codes must never kill the session — decode to a raw 'unknown' message.
+      return { command: 'unknown', id, data: { code, raw: Buffer.from(payload).toString('hex') } };
   }
 }
 

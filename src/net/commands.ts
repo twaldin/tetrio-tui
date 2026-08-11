@@ -21,6 +21,8 @@ export const CODE_NOPE = 42;
 export const CODE_PNI = 51;
 export const CODE_NOTIFY = 49;
 export const CODE_GENERIC = 43; // __pack__
+export const CODE_REJECTED = 19; // server rejected a message we sent (informational; real client flags net 'BAD')
+export const CODE_RELOAD = 33;   // server requests a client reload
 
 // Generic-channel command codes (command name <-> code).
 export const GENERIC_CODES: Record<string, number> = {

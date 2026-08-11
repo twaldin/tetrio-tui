@@ -13,12 +13,13 @@ const BUILT_IN_THEMES = ['tetrio', 'tokyo-night', 'catppuccin', 'gruvbox', 'nord
 // piece-style × border combos that each read distinctly
 const CONFIG_COMBOS: [string, string][] = [
   ['bevel', 'rounded'],
-  ['flat', 'none'],
+  ['blocks', 'mixed'],
   ['shiny', 'double'],
-  ['halfblock', 'mixed'],
-  ['outline', 'single'],
-  ['gradient', 'heavy'],
-  ['flat', 'ascii'],
+  ['braille', 'single'],
+  ['nes', 'rounded'],
+  ['elektronika', 'none'],
+  ['ascii', 'ascii'],
+  ['halfblock', 'heavy'],
 ];
 
 async function main() {

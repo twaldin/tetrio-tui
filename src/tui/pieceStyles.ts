@@ -139,17 +139,17 @@ function sc(): StyleCaches {
     // flat: pure solid
     flat_c[k] = { fg: c, bg: c };
 
-    // outline: solid fill with a NEUTRAL dark cap -> a true outline between rows.
-    // (a piece-hued cap made it pixel-identical to halfblock)
-    outline_c[k] = { fg: c, bg: shade(t.bg, 0.55) };
+    // outline: solid fill with a mid-shade cap OF THE SAME HUE -> a readable
+    // separator stripe. (neutral near-black read as a hole in the piece)
+    outline_c[k] = { fg: c, bg: shade(c, 0.55) };
 
     // gradient: dramatic vertical gradient (top very bright → bottom darker;
     // 0.62 keeps dark pieces (dracula J, blues) above board brightness)
     gradient_c[k] = { fg: tint(c, 0.30), bg: shade(c, 0.62) };
 
-    // halfblock: ▄ — bottom half full color, top half a deep shade of the piece
-    // (solid-but-slim; a board-colored top half read as a "missing" gap line)
-    halfblock_c[k] = { fg: c, bg: shade(c, 0.30) };
+    // halfblock: ▄ — bottom half full color, top half a medium shade of the piece
+    // (solid-but-slim; deep/black caps read as "half the color is missing")
+    halfblock_c[k] = { fg: c, bg: shade(c, 0.42) };
 
     // shiny: Γ corner highlight (light tint) on solid piece color
     shiny_corner[k] = { fg: tint(c, 0.55), bg: c };

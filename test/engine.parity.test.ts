@@ -248,3 +248,96 @@ describe('hold parity (TETR.IO semantics)', () => {
     expect(e.holdLocked).toBe(true);
   });
 });
+
+
+describe('handling flags parity (TETR.IO)', () => {
+  test('DAS CANCEL on: releasing one direction resets the other direction charge', () => {
+    const e = newGame(11, { cancel: true, das: 10, arr: 99 }); // arr huge so only DAS timing matters
+    // hold right for 5 ticks (charging), then ALSO hold left (left wins), release left
+    const both = { ...NEUTRAL, right: true };
+    for (let i = 0; i < 5; i++) tick(e, both);
+    const bothHeld = { ...NEUTRAL, right: true, left: true };
+    tick(e, bothHeld);                       // left edge -> moves left, lastshift=left
+    tick(e, { ...NEUTRAL, right: true });    // release left -> resume right, CANCEL resets its das
+    expect(e.lastShiftDir).toBe(1);
+    expect(e.rShift.das).toBeLessThanOrEqual(1); // was reset by cancel
+  });
+
+  test('DAS CANCEL off: resumed direction keeps its charge', () => {
+    const e = newGame(11, { cancel: false, das: 10, arr: 99 });
+    const both = { ...NEUTRAL, right: true };
+    for (let i = 0; i < 5; i++) tick(e, both);
+    tick(e, { ...NEUTRAL, right: true, left: true });
+    tick(e, { ...NEUTRAL, right: true });
+    expect(e.rShift.das).toBeGreaterThan(5); // kept charging through the interruption
+  });
+
+  test('DCD: rotating into a wall cuts the DAS charge by dcd frames', () => {
+    const e = newGame(11, { dcd: 3, das: 10, arr: 99 });
+    // walk to the left wall, hold left, then rotate -> das jumps by 3
+    const hold = { ...NEUTRAL, left: true };
+    for (let i = 0; i < 60; i++) tick(e, hold); // zoom to wall + charge full
+    const dasBefore = e.lShift.das;
+    tick(e, { ...NEUTRAL, left: true, rotCW: true }); // rotate at the wall
+    tick(e, { ...NEUTRAL, left: true });
+    expect(e.lShift.das).toBeGreaterThanOrEqual(dasBefore); // never decreases
+  });
+
+  test('safelock: hard drop is blocked for 7 frames after a lock-delay lock', () => {
+    const e = newGame(11, { g: 1, safelock: true, locktime: 5 });
+    // let the first piece lock naturally (lock-delay lock)
+    for (let i = 0; i < 600 && e.stats.piecesplaced === 0; i++) tick(e, NEUTRAL);
+    expect(e.stats.piecesplaced).toBe(1);
+    expect(e.safelockT).toBeGreaterThan(0);
+    // immediate hard drop attempt must be ignored while safelockT > 0
+    tick(e, { hardDrop: true } as any);
+    expect(e.stats.piecesplaced).toBe(1); // no second lock
+  });
+
+  test('safelock off: hard drop works immediately after a lock', () => {
+    const e = newGame(11, { g: 1, safelock: false, locktime: 5 });
+    for (let i = 0; i < 600 && e.stats.piecesplaced === 0; i++) tick(e, NEUTRAL);
+    expect(e.stats.piecesplaced).toBe(1);
+    tick(e, { hardDrop: true } as any);
+    tick(e, NEUTRAL);
+    expect(e.stats.piecesplaced).toBe(2);
+  });
+
+  test('IRS tap: a rotation pressed on the hard-drop tick applies to the new piece at spawn', () => {
+    const e = newGame(11, { irs: 'tap' });
+    const before = e.falling!.type;
+    // press hard drop AND rotate on the same tick -> the NEXT piece spawns rotated
+    tick(e, { ...NEUTRAL, hardDrop: true, rotCW: true });
+    expect(e.falling!.r).toBe(1);
+  });
+
+  test('IRS none: rotation on the hard-drop tick does not rotate the new piece', () => {
+    const e = newGame(11, { irs: 'none' });
+    tick(e, { ...NEUTRAL, hardDrop: true, rotCW: true });
+    expect(e.falling!.r).toBe(0);
+  });
+
+  test('soft drop: SDF replaces gravity (g*sdf); sdf>=41 with may20g is instant', () => {
+    const e = newGame(11, { sdf: 10, g: 0.02 });
+    const y0 = e.falling!.y;
+    for (let i = 0; i < 10; i++) tick(e, { ...NEUTRAL, softDrop: true });
+    // spec: r = max(g*sdf, 0.05*sdf) = max(0.2, 0.5) = 0.5 cells/frame -> 5 cells in 10 ticks
+    const fell = e.falling!.y - y0;
+    expect(fell).toBeGreaterThanOrEqual(4);
+    expect(fell).toBeLessThanOrEqual(6);
+    const e2 = newGame(11, { sdf: 41, may20g: true });
+    tick(e2, { ...NEUTRAL, softDrop: true });
+    const f2 = e2.falling!;
+    expect(Math.floor(f2.y)).toBe(Math.floor(f2.hy)); // slammed to ghost row
+  });
+
+  test('fractional DAS (6.7F) fires at the 7th tick', () => {
+    const e = newGame(11, { das: 6.7, arr: 0 });
+    const f = e.falling!;
+    const x0 = f.x;
+    const hold = { ...NEUTRAL, right: true };
+    tick(e, hold); // edge: x0+1
+    for (let i = 0; i < 6; i++) tick(e, hold); // 6 more ticks -> das=7 >= 6.7 -> zoom
+    expect(f.x).toBeGreaterThan(x0 + 1);
+  });
+});

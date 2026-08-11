@@ -140,6 +140,7 @@ export interface Engine {
   lShift: ShiftState;
   rShift: ShiftState;
   softdropHeld: boolean;
+  safelockT: number;         // safelock: frames after a lock-delay lock during which hard drop is blocked
   stats: GameStats;
   prevInput: InputState;
   lastShiftDir: -1 | 1;
@@ -205,7 +206,7 @@ export function createGame(options: Partial<GameOptions> = {}, seed?: number): E
     clearingFrames: 0, spawnDelay: 0,
     lShift: { dir: -1, held: false, das: 0, arr: 0 },
     rShift: { dir: 1, held: false, das: 0, arr: 0 },
-    softdropHeld: false, stats: state.stats, prevInput: { ...NEUTRAL_INPUT }, lastShiftDir: -1,
+    softdropHeld: false, safelockT: 0, stats: state.stats, prevInput: { ...NEUTRAL_INPUT }, lastShiftDir: -1,
     rotatingSystem: false,
   };
   return engine;
@@ -469,34 +470,52 @@ export function tick(engine: Engine, input: InputState): TickEvents {
     engine.state.hold = { piece: engine.hold, locked: engine.holdLocked };
   }
 
+  // safelock: hard drop is blocked for 7 frames after a lock-delay lock
+  if (engine.safelockT > 0) engine.safelockT--;
+
   // --- hard drop (on press edge) ---
-  if (input.hardDrop && !engine.prevInput.hardDrop && (opts.allow_harddrop ?? true)) {
+  if (input.hardDrop && !engine.prevInput.hardDrop && (opts.allow_harddrop ?? true) && engine.safelockT === 0) {
     const hdDist = ghostY(board, f.type, f.x, f.y, f.r) - f.y;
     if (hdDist > 0) engine.stats.score += Math.round(hdDist * SCORE_TABLE.harddrop * engine.stats.level);
     f.y = ghostY(board, f.type, f.x, f.y, f.r);
     events.harddrop = true;
     const lockEv = lockPiece(engine);
     Object.assign(events, lockEv);
+    // IRS: rotations pressed/held on the lock tick apply to the NEW piece at spawn
+    // (the hard-drop branch returns before the normal rotation pass, so they'd be lost).
+    applyIRS(engine, input, handling);
     applyGravityStats(engine);
     copyInput(engine.prevInput, input);
     return events;
   }
 
   // --- rotations (on press edge) ---
-  if (input.rotCW && !engine.prevInput.rotCW) { if (tryRotate(engine, 1)) events.rotate = true; }
-  if (input.rotCCW && !engine.prevInput.rotCCW) { if (tryRotate(engine, -1)) events.rotate = true; }
-  if (input.rot180 && !engine.prevInput.rot180 && (opts.allow180 ?? true)) { if (tryRotate(engine, 2)) events.rotate = true; }
+  if (input.rotCW && !engine.prevInput.rotCW) { if (tryRotate(engine, 1)) { events.rotate = true; applyDCD(engine, handling); } }
+  if (input.rotCCW && !engine.prevInput.rotCCW) { if (tryRotate(engine, -1)) { events.rotate = true; applyDCD(engine, handling); } }
+  if (input.rot180 && !engine.prevInput.rot180 && (opts.allow180 ?? true)) { if (tryRotate(engine, 2)) { events.rotate = true; applyDCD(engine, handling); } }
 
   // --- horizontal movement with DAS/ARR ---
-  const arr = handling.arr ?? 2, das = handling.das ?? 10, dcd = handling.dcd ?? 2;
+  const arr = handling.arr ?? 2, das = handling.das ?? 10;
   const leftEdge = input.left && !engine.prevInput.left;
   const rightEdge = input.right && !engine.prevInput.right;
+  const leftRelease = !input.left && engine.prevInput.left;
+  const rightRelease = !input.right && engine.prevInput.right;
   updateShift(engine.lShift, input.left, -1);
   updateShift(engine.rShift, input.right, 1);
   if (leftEdge) engine.lastShiftDir = -1;
   if (rightEdge) engine.lastShiftDir = 1;
-  // DAS cancel: releasing one direction while the other is held switches immediately
+  // KeyUp while the other direction is held: switch back to it immediately.
+  // With DAS CANCEL on, the resumed direction's charge is RESET (TETR.IO exact:
+  // 'if handling.cancel: other dir das=0, arr=handling.arr'). Off (default) = keep the charge.
   const cancel = handling.cancel ?? false;
+  if (leftRelease && engine.rShift.held) {
+    engine.lastShiftDir = 1;
+    if (cancel) { engine.rShift.das = 0; engine.rShift.arr = 0; }
+  }
+  if (rightRelease && engine.lShift.held) {
+    engine.lastShiftDir = -1;
+    if (cancel) { engine.lShift.das = 0; engine.lShift.arr = 0; }
+  }
 
   // resolve simultaneous directions (most recent press wins)
   let moveDir: -1 | 0 | 1 = 0;
@@ -522,11 +541,16 @@ export function tick(engine: Engine, input: InputState): TickEvents {
     }
   }
 
-  // --- gravity + soft drop ---
+  // --- gravity + soft drop (TETR.IO exact: SDF REPLACES gravity) ---
   const sdf = handling.sdf ?? 6;
   const softActive = input.softDrop;
   let gravity = engine.g;
-  if (softActive) gravity = (opts.gravitymay20g ?? true) ? Infinity : gravity * sdf;
+  if (softActive) {
+    const may20g = handling.may20g ?? opts.gravitymay20g ?? true;
+    gravity = sdf >= 41
+      ? (may20g ? Infinity : Math.max(engine.g * 41, 0.05 * 41)) // ∞-SDF needs ALLOW 20G on
+      : Math.max(engine.g * sdf, 0.05 * sdf);
+  }
   applyGravity(engine, gravity, softActive);
 
   // grounded -> lock delay
@@ -536,6 +560,8 @@ export function tick(engine: Engine, input: InputState): TickEvents {
     if ((f.locking ?? 0) >= (opts.locktime ?? 30)) {
       const lockEv = lockPiece(engine);
       Object.assign(events, lockEv);
+      // safelock: block hard drops for 7 frames after a lock-delay lock
+      if (handling.safelock ?? true) engine.safelockT = 7;
     }
   }
 
@@ -544,6 +570,46 @@ export function tick(engine: Engine, input: InputState): TickEvents {
   engine.state.btb = engine.btb;
   copyInput(engine.prevInput, input);
   return events;
+}
+
+/** IRS (initial rotation system): apply a rotation to the just-spawned piece.
+ *  'tap'/'auto': rotation key EDGES on the lock tick accumulate (mod 4) and apply with kicks.
+ *  'hold': held rotation keys at the spawn tick apply once. 'none': off. */
+function applyIRS(engine: Engine, input: InputState, handling: Handling): void {
+  const mode = handling.irs ?? 'tap';
+  if (mode === 'none') return;
+  const f = engine.falling;
+  if (!f) return;
+  let r = 0;
+  if (mode === 'hold') {
+    if (input.rotCW) r += 1;
+    if (input.rotCCW) r -= 1;
+    if (input.rot180) r += 2;
+  } else {
+    if (input.rotCW && !engine.prevInput.rotCW) r += 1;
+    if (input.rotCCW && !engine.prevInput.rotCCW) r -= 1;
+    if (input.rot180 && !engine.prevInput.rot180) r += 2;
+  }
+  r = ((r % 4) + 4) % 4;
+  if (r === 1) tryRotate(engine, 1);
+  else if (r === 2) tryRotate(engine, 2);
+  else if (r === 3) tryRotate(engine, -1);
+}
+
+/** DCD (DAS cut delay): a rotation that ends touching a wall CUTS both DAS charges
+ *  by dcd frames (TETR.IO: 'after rotations, if HasHitWall && dcd: das cut, both dirs'). */
+function applyDCD(engine: Engine, handling: Handling): void {
+  const dcd = handling.dcd ?? 0;
+  if (dcd <= 0) return;
+  const f = engine.falling;
+  if (!f) return;
+  const w = engine.state.board[0].length;
+  const cells = PIECE_ROTATIONS[f.type][f.r];
+  const hitWall = cells.some(([cx]) => { const x = f.x + cx; return x === 0 || x === w - 1; });
+  if (hitWall) {
+    engine.lShift.das += dcd;
+    engine.rShift.das += dcd;
+  }
 }
 
 function countPressed(prev: InputState, cur: InputState): number {

@@ -25,6 +25,11 @@ addExtension({
 
 const packr = new Packr();
 const unpackr = new Unpackr();
+// NetCodec extension encode/decode runs REENTRANTLY while packr is mid-pack (e.g. packing a
+// Replay ext triggers Encoder.pack(frames)). A dedicated Packr for extension-internal packing
+// keeps that off the main packr's state — sharing one corrupts the output buffer (observed:
+// ext payloads prefixed with bytes of earlier packs).
+const extPackr = new Packr();
 
 export function pack(value: unknown): Uint8Array {
   return packr.pack(value);
@@ -54,8 +59,8 @@ function initGameExtensions(): void {
   initStructures();
   ExtensionBase.LoadExtensions({
     addExtension: (e: unknown) => addExtension(e as never),
-    pack: (v: unknown) => packr.pack(v),
-    useBuffer: (b: unknown) => packr.useBuffer(b as never),
+    pack: (v: unknown) => extPackr.pack(v),
+    useBuffer: (b: unknown) => extPackr.useBuffer(b as never),
     unpack: (b: unknown) => unpackr.unpack(b as never),
   } as never);
 }

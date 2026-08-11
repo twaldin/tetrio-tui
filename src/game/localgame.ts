@@ -18,7 +18,7 @@ const KEY_TO_WIRE: Record<string, string> = {
 };
 
 export interface ReplayFrameOut {
-  type: 'keydown' | 'keyup' | 'full' | 'ige' | 'start' | 'strategy' | 'manual_target';
+  type: 'keydown' | 'keyup' | 'full' | 'end' | 'ige' | 'start' | 'strategy' | 'manual_target';
   frame: number;
   data: unknown;
 }
@@ -63,10 +63,11 @@ export class LocalGameController extends EventEmitter {
     this.result = 'playing';
     this.finalTime = 0;
     startGame(this.engine);
-    // initial frames: start + full snapshot
+    // initial frames: start + full snapshot. NOTE: no immediate flush — the official client
+    // first flushes at ~frame 50 (provisioned = current frame). Flushing at frame 0 gets the
+    // batch REJECTED by the server (observed live).
     this.frameBuffer.push({ type: 'start', frame: 0, data: {} });
     this.frameBuffer.push({ type: 'full', frame: 0, data: this.buildFullState() });
-    this.flush(true);
   }
 
   /** Restart the current game with the same options/seed/objective (the retry/reset key). */
@@ -74,16 +75,20 @@ export class LocalGameController extends EventEmitter {
     if (this._startParams) this.start(this.gameid, this._startParams.options, this._startParams.seed, this._startParams.objective);
   }
 
-  /** The wire FullState for the `full` frame (opponents reconstruct our board from it). */
+  /** The wire FullState for the `full` frame (opponents reconstruct our board from it).
+   *  Encoded by NetCodec FullState.encode — every field it reads must be present and
+   *  wire-legal (piece letters; garbage cells as 'gb'; irs/ihs in off/hold/tap). */
   private buildFullState(): unknown {
     const e = this.engine!;
     const s = e.state;
+    const o = s.options as unknown as Record<string, unknown>;
+    const ixs = (m: unknown): string => (m === 'none' ? 'off' : m === 'auto' ? 'hold' : (m as string) ?? 'tap');
     return {
       diyusi: 0,
       stats: this.buildStats(),
       game: {
         bag: [...s.bag],
-        board: s.board.map((r) => r.map((c) => (c === null ? null : c))),
+        board: s.board.map((r) => r.map((c) => (c === null ? null : c === 'g' ? 'gb' : c))),
         hold: { locked: s.hold.locked, piece: s.hold.piece },
         g: s.g,
         controlling: {
@@ -97,32 +102,63 @@ export class LocalGameController extends EventEmitter {
           hy: s.falling.hy ?? 0, irs: 0, kick: 0, keys: 0, flags: 0,
           safelock: 0, lockresets: 0, rotresets: 0, skip: [], locking: s.falling.locking ?? 0,
         } : null,
-        handling: s.options as unknown as Record<string, unknown>,
+        handling: {
+          arr: o.arr ?? 2, sdf: o.sdf ?? 6, safelock: o.safelock ?? true,
+          cancel: o.cancel ?? false, may20g: o.may20g ?? true,
+          das: o.das ?? 10, dcd: o.dcd ?? 2,
+          irs: ixs(o.irs), ihs: ixs(o.ihs),
+        },
         playing: s.playing,
       },
     };
   }
 
+  /** Wire Stats struct (NetCodec Stats.encode) — every field it reads is required. */
   private buildStats(): unknown {
     const st = this.engine!.stats;
     return {
-      zenlevel: 1, zenprogress: 0,
+      lines: st.lines, level_lines: st.lines, level_lines_needed: 0,
+      inputs: st.inputs, holds: st.holds, score: st.score, level: st.level ?? 1,
+      combo: st.currentcombo ?? 0, topcombo: st.combomax ?? 0, combopower: 0,
+      btb: st.btb ?? 0, topbtb: st.btbmax ?? 0, btbpower: 0,
+      tspins: st.tspins ?? 0, piecesplaced: st.piecesplaced ?? 0,
       clears: {
         singles: 0, doubles: 0, triples: 0, quads: 0, pentas: 0,
-        realtspins: st.tspins, minitspins: 0, minitspinsingles: 0, tspinsingles: 0,
+        realtspins: st.tspins ?? 0, minitspins: 0, minitspinsingles: 0, tspinsingles: 0,
         minitspindoubles: 0, tspindoubles: 0, minitspintriples: 0, tspintriples: 0,
-        minitspinquads: 0, tspinquads: 0, tspinpentas: 0, allclear: st.allclears,
+        minitspinquads: 0, tspinquads: 0, tspinpentas: 0, allclear: st.allclears ?? 0,
       },
       garbage: {
         sent: st.garbage.sent, sent_nomult: st.garbage.sent, maxspike: 0, maxspike_nomult: 0,
         received: st.garbage.received, attack: st.garbage.attack, cleared: st.garbage.cleared,
       },
-      pieces: st.piecesplaced, inputs: st.inputs, holds: st.holds,
-      score: st.score, topcombo: st.combomax, currentcombo: st.currentcombo,
-      btb: st.btb, topbtb: st.btbmax, apm: st.apm, pps: st.pps, vsscore: st.vsscore,
-      kills: st.kills, time: st.currentTime,
+      kills: st.kills ?? 0,
+      finesse: { combo: 0, faults: 0, perfectpieces: 0 },
+      zenith: {
+        altitude: 0, rank: 0, peakrank: 0, avgrankpts: 0, totalbonus: 0,
+        targetingfactor: 0, targetinggrace: 0, floor: 0,
+        revives: 0, revivesTotal: 0, speedrun: false, speedrun_seen: false,
+        splits: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+      },
     };
   }
+
+  /** The wire EndStats for the `end` frame — tells the server our game is over + final state. */
+  private buildEndStats(reason: 'topout' | 'forfeit' | 'winner'): unknown {
+    const st = this.engine?.stats;
+    const full = this.buildFullState() as { diyusi: number; stats: unknown; game: unknown };
+    return {
+      successful: reason === 'winner',
+      gameoverreason: reason,
+      killer: { gameid: 0, type: 'sizzle', username: '' },
+      options: {}, // PlayerOptionsDelta: no changes from the assigned options
+      aggregatestats: { apm: st?.apm ?? 0, pps: st?.pps ?? 0, vsscore: st?.vsscore ?? 0 },
+      game: full.game,
+      stats: full.stats,
+      diyusi: full.diyusi,
+    };
+  }
+
 
   /** Directly set the input state (programmatic play / solver). Bypasses the tap model. */
   setInput(input: Partial<InputState>): void {
@@ -159,6 +195,7 @@ export class LocalGameController extends EventEmitter {
       this.playing = false;
       this.result = 'topout';
       this.finalTime = this.engine.stats.currentTime;
+      this.pushEndFrame('topout');
       this.flush(true);
       this.emit('gameover', false);
       return events;
@@ -172,6 +209,7 @@ export class LocalGameController extends EventEmitter {
         this.playing = false;
         this.result = 'win';
         this.finalTime = this.engine.stats.currentTime;
+        this.pushEndFrame('winner');
         this.flush(true);
         this.emit('gameover', true);
         return events;
@@ -215,7 +253,16 @@ export class LocalGameController extends EventEmitter {
     }
   }
 
+  /** Queue the `end` frame (EndStats) so the server records the game result. */
+  private pushEndFrame(reason: 'topout' | 'forfeit' | 'winner'): void {
+    if (!this.engine) return;
+    try {
+      this.frameBuffer.push({ type: 'end', frame: this.frame, data: this.buildEndStats(reason) });
+    } catch { /* never let stats encoding kill the game loop */ }
+  }
+
   forfeit(): void {
+    if (this.playing) this.pushEndFrame('forfeit');
     this.playing = false;
     this.flush(true);
     this.emit('gameover', false);

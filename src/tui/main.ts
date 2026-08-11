@@ -10,6 +10,7 @@ import { OpponentTracker } from '../game/state.js';
 import { GameConnection } from '../net/gameconn.js';
 import * as fs from 'node:fs';
 import { LeagueScreen } from './screens/league.js';
+import { QuickPlayScreen } from './screens/quickplay.js';
 import { RoomListingScreen, RoomLobbyScreen } from './screens/lobby.js';
 import { ChannelApi } from '../net/channel.js';
 import { createChannelScreen } from './screens/channel.js';
@@ -103,7 +104,7 @@ export class TetrioApp {
     return {
       title: 'MULTIPLAYER', color: THEME.accent,
       items: [
-        { id: 'quickplay', label: 'QUICK PLAY', sub: 'scale the tower! how far can you get?', color: [200, 120, 60], action: () => this.notImpl('QUICK PLAY') },
+        { id: 'quickplay', label: 'QUICK PLAY', sub: 'scale the tower! how far can you get?', color: [200, 120, 60], action: () => this.launchQuickPlay() },
         { id: 'league', label: 'TETRA LEAGUE', sub: 'fight players of your skill in ranked duels', color: THEME.league, disabled: !this.loggedIn, action: () => this.launchLeague() },
         { id: 'custom', label: 'CUSTOM GAME', sub: 'create public and private rooms', color: THEME.solo, action: () => this.launchRoomCreate() },
         { id: 'listing', label: 'ROOM LISTING', sub: 'join public games', color: THEME.channel, action: () => this.launchRoomListing() },
@@ -117,7 +118,7 @@ export class TetrioApp {
       items: [
         { id: '40l', label: '40 LINES', sub: 'clear 40 lines as fast as you can', color: THEME.solo, action: () => this.launchSolo('40l') },
         { id: 'blitz', label: 'BLITZ', sub: 'rack up as much score as possible in 2 minutes', color: THEME.warn, action: () => this.launchSolo('blitz') },
-        { id: 'zenith', label: 'QUICK PLAY', sub: 'scale the tower (requires online)', color: [200, 120, 60], action: () => this.notImpl('QUICK PLAY') },
+        { id: 'zenith', label: 'QUICK PLAY', sub: 'scale the tower (requires online)', color: [200, 120, 60], action: () => this.launchQuickPlay() },
         { id: 'zen', label: 'ZEN', sub: 'just relax and stack', color: THEME.good, action: () => this.launchSolo('zen') },
         { id: 'custom', label: 'PRACTICE', sub: 'versus practice vs no opponent', color: THEME.accent2, action: () => this.launchSolo('practice') },
       ],
@@ -188,6 +189,25 @@ export class TetrioApp {
     return map;
   }
 
+  /** QUICK PLAY: join the X-QP system room and drop into the climb lobby. */
+  private launchQuickPlay(): void {
+    if (!this.connected) { this.notImpl('QUICK PLAY\n(requires online connection)'); return; }
+    this.session.joinRoom('X-QP');
+    const screen = new QuickPlayScreen(this.client, {
+      onGameStart: () => this.enterVersusGame('QUICK PLAY', {
+        onRetry: () => {
+          // leave the finished run, pop back to the QP lobby, and queue a fresh climb
+          this.gameconn.leave();
+          this.session.send('game.forfeit');
+          this.app.pop();
+          screen.startClimb();
+        },
+      }),
+      onLeave: () => this.app.pop(),
+    });
+    this.push(screen);
+  }
+
   private launchLeague(): void {
     if (!this.loggedIn) { this.notImpl('TETRA LEAGUE\n(needs a registered account)'); return; }
     this.push(new LeagueScreen(this.client, {
@@ -225,7 +245,7 @@ export class TetrioApp {
   }
 
   /** Enter an online versus/league game: start the GameConnection + show the game screen. */
-  private enterVersusGame(label: string): void {
+  private enterVersusGame(label: string, opts: { onRetry?: () => void } = {}): void {
     // The GameConnection begins when the server assigns our gameid (wireGame handles it).
     // Show the versus game screen; it renders my board + opponents.
     const screen = new GameScreen({
@@ -233,6 +253,11 @@ export class TetrioApp {
       opponents: this.gameconn.opponents,
       onExit: () => { this.gameconn.leave(); this.session.send('game.forfeit'); this.app.pop(); },
       modeLabel: label,
+      autoPlay: process.env.TUI_AUTOPLAY === '1' || process.argv.includes('--autoplay'),
+      // online games must send a faithful input stream (the server re-simulates it) —
+      // no solver teleports; drive with real key presses.
+      faithfulAuto: true,
+      onRetry: opts.onRetry,
     });
     screen.setKeymap(this.gameKeymap()); // apply the configured keybinds
     this.push(screen);
@@ -245,7 +270,52 @@ export class TetrioApp {
     this.session.on('game.start', (d: any) => this.onVersusStart(d));
     this.session.on('game.match', (d: any) => this.onVersusStart(d));
     this.client.on('room.update', (room: any) => { if (room?.state === 'ingame') this.maybeEnterRoomGame(); });
-    this.session.on('game.replay.state', (d: any) => { if (!this.gameconn.inGame && d?.gameid) this.onVersusStart(d); });
+    this.session.on('game.replay.state', (d: any) => {
+      // In X-QP (QUICK PLAY) replay.state arrives for SCOPED OPPONENT games ('early'/'wait') —
+      // never an assignment trigger there. QP assignments come via game.replay.enter below.
+      if (this.client.room?.id === 'X-QP') return;
+      if (!this.gameconn.inGame && d?.gameid) this.onVersusStart(d);
+    });
+    // QUICK PLAY (X-QP): game assignment + opponent streams arrive as game.replay.enter broadcasts.
+    this.session.on('game.replay.enter', (d: any) => this.onQPReplayEnter(d));
+    this.session.on('game.replay.end', (d: any) => this.onQPReplayEnd(d));
+    this.client.on('room.leave', () => this.clearQPScopes());
+  }
+
+  /** gameids of QP opponents we're currently scoping (capped). */
+  private qpScoped = new Set<number>();
+  private static readonly QP_MAX_SCOPES = 4;
+
+  private onQPReplayEnter(d: any): void {
+    if (this.client.room?.id !== 'X-QP') return;
+    const p = d?.player;
+    if (!p) return;
+    if (p.userid === this.client.userid) {
+      // our climb: server assigned our gameid (+ options + seed)
+      if (!this.gameconn.inGame) this.gameconn.enterGame(p.gameid, p.options ?? {}, p.options?.seed);
+      return;
+    }
+    // another climber started: scope a few so their boards render next to ours
+    const gid = p.gameid;
+    if (!gid || this.qpScoped.has(gid) || this.qpScoped.size >= TetrioApp.QP_MAX_SCOPES) return;
+    this.qpScoped.add(gid);
+    this.session.scopeStart(gid);
+    // register the view with the game's options so the tracker simulates it from frame 0
+    this.gameconn.opponents.setFullState(gid, { game: { setoptions: p.options } }, { userid: p.userid, username: p.options?.username });
+  }
+
+  private onQPReplayEnd(d: any): void {
+    const gid = d?.gameid;
+    if (gid && this.qpScoped.has(gid)) {
+      this.qpScoped.delete(gid);
+      this.session.scopeEnd(gid);
+      this.gameconn.opponents.remove(gid);
+    }
+  }
+
+  private clearQPScopes(): void {
+    for (const gid of this.qpScoped) this.session.scopeEnd(gid);
+    this.qpScoped.clear();
   }
 
   private onVersusStart(d: any): void {

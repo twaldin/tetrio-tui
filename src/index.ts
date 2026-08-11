@@ -114,7 +114,12 @@ async function main(): Promise<void> {
         await session.loginAnonymous(login.username);
       }
       await session.connect();
-      if (session.api.token && session.userid) saveSession(session.api.token, session.userid, session.user?.user?.username); // persist login across sessions
+      // persist login across sessions — but never overwrite a saved ACCOUNT session with a
+      // throwaway guest/anon token (guests can't use matchmaking anyway and the user would
+      // lose their real login).
+      if (session.api.token && session.userid && session.user?.user?.role !== 'anon') {
+        saveSession(session.api.token, session.userid, session.user?.user?.username);
+      }
       tetrioApp.showHome();
     } catch (e: any) {
       loginScreen.setError(String(e?.body?.error?.msg ?? e?.message ?? e));

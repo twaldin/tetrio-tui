@@ -5,6 +5,7 @@
 import { EventEmitter } from 'node:events';
 import { TetrioSession } from '../net/session.js';
 import { LocalGameController, type ReplayFrameOut } from '../game/localgame.js';
+import { Replay } from './structures.js';
 import { OpponentTracker } from '../game/state.js';
 import type { GameOptions } from '../types.js';
 
@@ -38,7 +39,9 @@ export class GameConnection extends EventEmitter {
     // outgoing frames from my controller -> server
     this.controller.on('frames', (frames: ReplayFrameOut[], provisioned: number) => {
       if (!this.inGame) return;
-      this.session.send('game.replay', { gameid: this.myGameid, provisioned, frames });
+      // The server expects game.replay data to be a NetCodec Replay struct (msgpack ext 10),
+      // NOT a plain {gameid, provisioned, frames} record — plain records get REJECTED.
+      this.session.send('game.replay', new Replay(this.myGameid, provisioned, frames));
     });
     this.controller.on('gameover', () => {
       // we topped out / forfeited locally
@@ -120,6 +123,18 @@ export class GameConnection extends EventEmitter {
 
   private onReplayEnd(d: any): void {
     const gameid = d?.gameid;
+    if (gameid === this.myGameid && this.inGame) {
+      // The server authoritatively ended OUR game (it re-simulates our input stream) —
+      // stop submitting frames and end the local game. Do NOT send an end frame here:
+      // the game is already closed server-side; late frames just get REJECTED.
+      this.inGame = false;
+      if (this.controller.playing) {
+        this.controller.playing = false;
+        this.controller.result = 'topout';
+        this.controller.finalTime = this.controller.engine?.stats.currentTime ?? 0;
+      }
+      this.emit('end', { win: false, reason: d?.data?.gameoverreason ?? 'server' });
+    }
     this.opponents.markDead(gameid);
     this.emit('opponentsChanged');
   }
@@ -134,8 +149,8 @@ export class GameConnection extends EventEmitter {
   }
 
   leave(): void {
+    this.controller.forfeit(); // flushes the 'end' frame while still inGame
     this.inGame = false;
-    this.controller.forfeit();
     this.opponents.clear();
   }
 }

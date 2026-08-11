@@ -26,6 +26,11 @@ export interface GameScreenOpts {
   modeLabel: string;        // e.g. "TETRA LEAGUE", "40 LINES", "BLITZ"
   allowOpponents?: boolean;
   autoPlay?: boolean;      // solver plays the game (demo mode)
+  /** Online games: autoplay must emit REAL key presses (the server re-simulates our input
+   *  stream — solver teleports desync it and the server ends our game early). */
+  faithfulAuto?: boolean;
+  /** Online retry (e.g. QUICK PLAY re-climb): replaces the local restart on the reset key. */
+  onRetry?: () => void;
 }
 
 
@@ -65,6 +70,8 @@ export class GameScreen implements Screen {
   private shakeFrames = 0;
   private keymap: Record<string, string>;
   private autoPlay = false;
+  private faithfulAuto = false;
+  private onRetryCb: (() => void) | null = null;
   private fx = new EffectManager();
   private _pendingClear: { lines: number; kind: string; tspin: string; attack: number } | null = null;
   /** The TETR.IO-style action-text block on the left of the board (one at a time). */
@@ -81,6 +88,8 @@ export class GameScreen implements Screen {
     this.modeLabel = opts.modeLabel;
     this.keymap = defaultKeymap();
     this.autoPlay = opts.autoPlay ?? false;
+    this.faithfulAuto = opts.faithfulAuto ?? false;
+    this.onRetryCb = opts.onRetry ?? null;
     this.ctrl.on('attack', (amt: number) => {
       this.effects.push({ kind: 'attack', frame: this.frame, amount: amt });
       this.shakeFrames = Math.min(8, 2 + amt);
@@ -98,7 +107,12 @@ export class GameScreen implements Screen {
     const key = this.keymap[ev.key] ?? this.keymap[ev.sequence ?? ''];
     if (!key) return;
     this.ilog('key', { key, type: ev.type, repeat: !!ev.repeat, kitty: kittyKeyboard() });
-    if (key === 'reset' && ev.type === 'down') { this.pendingTaps.length = 0; this.ctrl.restart(); return; } // retry: restart the game
+    if (key === 'reset' && ev.type === 'down') {
+      this.pendingTaps.length = 0;
+      if (this.onRetryCb) { this.onRetryCb(); return; } // online retry (re-enter via the server)
+      this.ctrl.restart();
+      return;
+    } // retry: restart the game
     if (kittyKeyboard()) {
       // kitty keyboard protocol: real keyup events — exact press/release, no heuristics.
       // OS-level repeats are ignored: the engine's own DAS/ARR drives held-key movement.
@@ -260,6 +274,21 @@ export class GameScreen implements Screen {
     // preview queue with HOLD as a first-class move (it saves I-pieces for the well and
     // reroutes S/Z around forced holes). It sustains the full back-to-back Tetris chain.
     const move = bestMove(board, f.type, engine.state.bag, engine.hold, !engine.holdLocked);
+    if (this.faithfulAuto) {
+      // Online: step toward the solver target with REAL key presses (queued as one-tick
+      // pulses -> recorded as keydown/keyup frames), so the server's re-simulation matches.
+      if (move.useHold && !engine.holdLocked) {
+        this.pendingTaps.push('hold');
+        this.autoPlayCooldown = 2;
+        return;
+      }
+      if (f.r !== move.r) { this.pendingTaps.push('rotateCW'); this.autoPlayCooldown = 1; return; }
+      if (f.x < move.x) { this.pendingTaps.push('moveRight'); this.autoPlayCooldown = 1; return; }
+      if (f.x > move.x) { this.pendingTaps.push('moveLeft'); this.autoPlayCooldown = 1; return; }
+      this.pendingTaps.push('hardDrop');
+      this.autoPlayCooldown = 3;
+      return;
+    }
     if (move.useHold) {
       // Swap first; the swapped-in piece is placed on a later call (hold locks until then).
       this.ctrl.setInput({ hold: true });
@@ -340,14 +369,17 @@ export class GameScreen implements Screen {
         buf.drawText(sx2, boardY + 18, 'PPS', _s.dimS);
         buf.drawText(sx2 + 8, boardY + 18, st.pps.toFixed(2), _s.textBold);
       }
-      // persistent B2B indicator — always show the current back-to-back chain (TETR.IO style)
-      if (st.btb > 0 && this.ctrl.result === 'playing') {
+      // permanent B2B stat row — always visible during play AND on the results screen
+      buf.drawText(sx2, boardY + 19, 'B2B', _s.dimS);
+      buf.drawText(sx2 + 8, boardY + 19, `x${st.btb}`, st.btb > 0 ? _s.warnBold : _s.faintS);
+      // big chain indicator — persists as long as the chain is alive (and on the end screen)
+      if (st.btb > 0) {
         if (bigTextEnabled()) {
-          renderBigText(buf, sx2, boardY + 20, `x${st.btb}`, { fg: t.warn, bold: true }, 'block');
+          renderBigText(buf, sx2, boardY + 21, `x${st.btb}`, { fg: t.warn, bold: true }, 'block');
           const bw2 = measureBigText(`x${st.btb}`, 'block').width;
-          buf.drawText(sx2 + bw2 + 1, boardY + 20 + 3, 'B2B', { fg: t.accent, bold: true });
+          buf.drawText(sx2 + bw2 + 1, boardY + 21 + 3, 'B2B', { fg: t.accent, bold: true });
         } else {
-          buf.drawText(sx2, boardY + 20, `B2B x${st.btb}`, { fg: t.warn, bold: true });
+          buf.drawText(sx2, boardY + 21, `B2B x${st.btb}`, { fg: t.warn, bold: true });
         }
       }
     } else {
@@ -361,6 +393,8 @@ export class GameScreen implements Screen {
       buf.drawText(sx2 + 6, boardY + 18, `${st.garbage.attack}`, _s.accentBold);
       buf.drawText(sx2, boardY + 19, 'SNT', _s.dimS);
       buf.drawText(sx2 + 6, boardY + 19, `${st.garbage.sent}`, _s.goodBold);
+      buf.drawText(sx2, boardY + 20, 'B2B', _s.dimS);
+      buf.drawText(sx2 + 6, boardY + 20, `x${st.btb}`, st.btb > 0 ? _s.warnBold : _s.faintS);
     }
 
     // main board: strong border + checkerboard interior

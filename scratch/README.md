@@ -6,4 +6,5 @@
   stubs to dump the REAL struct/table schemas (je/qe field lists, all enum
   tables). Output: `deobf_out.json`. This is how every enum table in
   `src/net/structures.ts` was confirmed.
-- `validate.ts` — quick capture decoder smoke run.
+- Capture decoder regression coverage lives in [`test/capture.test.ts`](../test/capture.test.ts),
+  using the recorded `docs/captures/game_spectate_log.json` fixture.

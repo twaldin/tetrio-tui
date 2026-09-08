@@ -33,10 +33,12 @@ src/
   net/api.ts          — HTTP: environment, authenticate(login), anonymousJoin, users/me, server/ribbon, X-Connection-ID
   game/engine.ts      — local stacker: SRS+ kicks, 7-bag, gravity, DAS/ARR/DCD/SDF, lock delay,
                         garbage queue, attack table, B2B, combo, all-clear, spins (all-mini+)
+  game/localgame.ts   — local engine, input capture, replay frames and IGE application
   game/state.ts       — apply replay frames/IGE to reconstruct opponent boards
-  game/ige.ts         — IGE event model + application
+  client.ts          — room/league state, session event forwarding and command helpers
   tui/renderer.ts     — terminal diff renderer (cells, colors, blit)
-  tui/input.ts        — key parsing (raw), keybindings, DAS/ARR repeat
+  tui/driver.ts       — terminal lifecycle, raw key/mouse parsing and keyboard protocol support
+  tui/screens/game.ts — game keybindings and held-key input; DAS/ARR lives in game/engine.ts
   tui/screens/*.ts    — login, home, lobby/room, league queue, game, config
   tui/app.ts          — screen stack, event loop, wiring
   index.ts            — entry, arg/config handling
@@ -48,8 +50,8 @@ src/
   - dedicated codes: 25 new, 63 die, 9 ping{recvid:u32be}, 44 session{ribbonid:8B,tokenid:8B},
     7 packets{len-prefixed nested}, 4 kick, 42 nope, 51 pni, 49 notify, 43 __pack__ (generic).
   - code 43 payload = `u8 command_code + msgpackr(data)`; command codes in command_table.json.
-- Handshake: C>S `new` -> S>C `packets[session]` -> C>S `authorize{token,handling,signature,i}`
-  -> S>C `authorize{success,...}` -> C>S `social.presence{status,detail}`. Ping every ~2.5-5s.
+- Handshake: C>S `new` -> S>C `packets[session]` -> C>S `server.authorize{token,handling,signature,i}`
+  -> S>C `server.authorize{success,...}` -> C>S `social.presence{status,detail}`. Ping every ~2.5-5s.
 - Auth (HTTP): GET /api/server/environment -> POST /api/users/authenticate {username,password,totp}
   (or /api/users/anonymousJoin) -> {token(JWT),userid} -> GET /api/users/me (Bearer + X-Connection-ID)
   -> GET /api/server/ribbon -> ping spools -> connect best.
@@ -79,7 +81,14 @@ gravity g (cells/frame, 60fps), DAS/ARR/DCD/SDF handling, garbage: holes, messin
 cancel, blocking, B2B (chain off / charge on), combo table (multiplier), all-clear (+5, +1 b2b).
 Attack table is TETR.IO-specific — extract from client or derive from captures; VALIDATE vs live.
 
-## Testing
+## Testing targets
+
+These targets include manual/live scenarios, not just current automated coverage.
+`test/net.session.test.ts` currently covers anonymous login and Ribbon authorization,
+not room joining or spectating. See [README development guidance](README.md#development)
+for test commands and live-network/PTY gates. Do not run live/account scenarios for
+documentation validation.
+
 - vitest unit tests: netcodec round-trip, engine determinism (fixed seed), ribbon framing.
 - Integration (anonymous account): connect -> authorize -> join custom room -> spectate -> decode boards.
 - tuistory: snapshot menus + in-game render. Drive a real key sequence, assert frames.

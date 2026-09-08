@@ -1,8 +1,8 @@
 # tetrio-tui theme authoring
 
-Drop a JSON file into `~/.config/tetrio-tui/themes/` (or `$XDG_CONFIG_HOME/tetrio-tui/themes/`)
-and it appears in **CONFIG → VIDEO → THEME** — no rebuild, no restart of the app beyond
-re-opening the config screen. The file name (minus `.json`) is the theme key.
+Drop a JSON file into `~/.config/tetrio-tui/themes/` (or `$XDG_CONFIG_HOME/tetrio-tui/themes/`),
+then restart the app to load it. Select it in **CONFIG → VIDEO → THEME** — no rebuild needed.
+Re-opening CONFIG does not reload files. The file name (minus `.json`) is the theme key.
 
 ```json
 {
@@ -21,13 +21,12 @@ re-opening the config screen. The file name (minus `.json`) is the theme key.
 
 ## colors
 
-Every color the TUI uses is overridable. Values are `#rgb` / `#rrggbb` hex strings
-or `[r, g, b]` arrays. Missing colors fall back to the `extends` theme (default `tetrio`),
-so a one-color theme is fine.
+The theme color fields below accept `#rgb` / `#rrggbb` hex strings or `[r, g, b]` arrays.
+Missing colors fall back to the `extends` theme (default `tetrio`), so a one-color theme is fine.
 
 | group | keys |
 |---|---|
-| depth layers | `base` `mantle` `surface` `overlay` (aliases: `bg` `panel` `panelAlt`) |
+| depth layers | `bg` (screen background) `panel` (panel fill); accepted fields `base` `mantle` `surface` `overlay` `panelAlt` are not currently read by the renderer |
 | borders | `border` `borderBright` `borderActive` `borderSubtle` `boardFrame` |
 | text | `text` `subtext` `dim` `faint` |
 | accents | `accent` `accent2` `good` `warn` `bad` `info` |
@@ -37,6 +36,9 @@ so a one-color theme is fine.
 | pieces | `pieces.i` `pieces.o` `pieces.t` `pieces.s` `pieces.z` `pieces.l` `pieces.j` `pieces.g` (garbage) `pieces.ghost` |
 
 `pieces` may also be a nested object: `"pieces": { "i": "#2ee6ff" }`.
+
+The loader assigns each color field independently. Setting `base`, `mantle` or `surface`
+does not update `bg`, `panel` or `panelAlt`; set `bg` and `panel` for visible background changes.
 
 ## borders
 
@@ -53,11 +55,13 @@ Action-text word overrides: `single` `double` `triple` `tetris` `tspin`
 ## built-in themes
 
 `tetrio` `tokyo-night` `catppuccin` `gruvbox` `nord` `dracula` `solarized` `monokai`
-— any of them works as an `extends` base (disk themes can extend each other too;
-later files in alphabetical order win key collisions).
+— any of them works as an `extends` base. Files load once in alphabetical order;
+to extend another disk theme, its file must sort before yours. An unknown or not-yet-loaded
+base falls back to `tetrio`. A disk theme with a built-in key replaces that entry.
 
 ## piece styles & more
 
 Piece rendering is a separate axis: CONFIG → VIDEO → PIECE STYLE
-(`bevel` `flat` `outline` `gradient` `halfblock` `shiny`), plus MINIMAL MODE
-(no ASCII art / shake / particles). Everything composes with themes.
+(`bevel` `flat` `blocks` `shiny` `outline` `gradient` `halfblock` `ascii` `braille`
+`nes` `elektronika`), plus MINIMAL MODE (no ASCII art / shake / particles).
+Everything composes with themes.

@@ -106,7 +106,7 @@ HUD headings use the heading-line char around titles: `───basic keybinds�
 
 ## (c) Features/cosmetics worth adding to tetrio-tui, ranked by impact/effort
 
-tetrio-tui currently has: 4 piece styles (bevel/flat/outline/gradient), rounded-corner boxes only, 8 themes, an effect manager (shake/flash/popup). Ranked suggestions:
+The tetrio-tui snapshot studied for this report had: 4 piece styles (bevel/flat/outline/gradient), rounded-corner boxes only, 8 themes, an effect manager (shake/flash/popup). The ranked suggestions below are historical, not a current implementation checklist; see [THEMES.md](THEMES.md) for current styles.
 
 1. **Half-block preview compression** (HIGH impact / LOW effort) — render next/hold previews one terminal row tall using `▀`/`▄`/`█` (`I`=`▄▄▄▄`, `S`=`▄█▀`, `T`=`▄█▄`…). Halves queue height; great for long TETR.IO-style queues. Add as a new `pieceStyles.ts` entry — the drawMino signature already supports 2-wide cells.
 2. **Border-style presets + embedded labels + queue separators** (HIGH / LOW) — abstract the box glyphs into a preset table: ASCII (`+-|`), single (`┌─┐│`), rounded (`╭─╮│`), heavy/double mix (tetro-tui's signature: `║` sides, dashed `╴` top, `▀` half-block floor, `╓╖╙╜` corners), borderless. Add label-in-border (`───next───┐`) and dashed separators between queue pieces ending in `┤`. The `▀`-floor trick alone makes the board look materially more "grounded".

@@ -21,10 +21,11 @@ engine (SRS+ kicks, Park-Miller RNG, exact versus attack/garbage tables).
 - **TETRA CHANNEL**: leaderboards (League / XP / AR), global news feed, player profiles.
 - **Full menu tree** mirroring the webapp: MULTIPLAYER / SOLO / TETRA CHANNEL / CONFIG.
 - **Config** (keybinds, handling, video, audio) persisted to disk, with **TETR.IO config import**.
-- **6 piece styles** (bevel / flat / outline / gradient / halfblock / shiny) × **7 border styles**
-  (rounded / single / double / heavy / tetro-mixed / ascii / zen-none) — mix freely.
-- **User themes from disk** (`~/.config/tetrio-tui/themes/*.json`): every color, border glyph,
-  and action word is overridable — see [docs/THEMES.md](docs/THEMES.md).
+- **11 piece styles** (bevel / flat / blocks / shiny / outline / gradient / halfblock /
+  ascii / braille / nes / elektronika) × **7 border styles**
+  (rounded / single / double / heavy / mixed / ascii / none) — mix freely.
+- **User themes from disk** (`~/.config/tetrio-tui/themes/*.json`): override theme colors,
+  border glyphs and action words — see [docs/THEMES.md](docs/THEMES.md).
 - **Minimal mode**: no ASCII art, no shake/particles — a calm plain-text board.
 - Truecolor diff-rendering at 60fps, line-clear / attack / all-clear effects, ghost piece, hold,
   next queue, per-mode stats (APM / PPS / VS).
@@ -37,6 +38,8 @@ Higher-quality MP4: [docs/demo.mp4](docs/demo.mp4)
 
 ## Install & run
 
+Requires **Node.js 22+** and npm.
+
 ```bash
 npm install
 npm run build        # -> dist/
@@ -45,13 +48,23 @@ npm start            # dist/index.js
 npx tsx src/index.ts
 ```
 
-Log in on the LOGIN screen with your account, or:
+Normal startup shows an animation (unless disabled in CONFIG), then the ACCOUNT screen.
+Choose LOGIN, continue a saved account session, switch accounts, log out, play as a guest,
+or play offline. Account sessions are saved in
+`$XDG_CONFIG_HOME/tetrio-tui/session.json` (default: `~/.config/tetrio-tui/session.json`);
+guest sessions do not replace a saved account session.
+
+To skip the account screen:
 
 ```bash
 npx tsx src/index.ts --guest            # play as a guest (no League)
 npx tsx src/index.ts --token <jwt>      # resume an existing session token
-npx tsx src/index.ts --offline          # no network at all — straight to the menu
+npx tsx src/index.ts --offline          # skip login and Ribbon; open the home menu for solo play
 ```
+
+`--offline` skips the game-server connection; it is **not a network sandbox**.
+40 LINES, BLITZ, ZEN and PRACTICE run locally, but opening TETRA CHANNEL can still
+fetch public API data.
 
 **Default controls** (rebindable in CONFIG): `←/→` move, `↓` soft drop, `space` hard drop,
 `z`/`x` rotate CCW/CW, `a` rotate 180, `c` hold, `r` reset, `esc` forfeit/back.
@@ -62,12 +75,13 @@ npx tsx src/index.ts --offline          # no network at all — straight to the 
 src/
   net/     theorypack (msgpackr) · ribbon (WS framing/commands/ping/resume) · http api (auth/env/me/ribbon)
            netcodec (bit-level game codec) + structures (boards, pieces, full state, IGE, frames)
-           session · client · gameconn (online versus/league orchestration)
+           session · gameconn (online versus/league orchestration)
   game/    engine (SRS+ kicks, 7-bag Park-Miller RNG, gravity, DAS/ARR, lock delay, garbage,
            attack/combo/b2b/all-clear, T-spins) · localgame (input->frames->server) · state (opponents)
   tui/     renderer (truecolor diff) · driver (ANSI+stdin) · app (screen stack) · screens
            (login, home, menu, game, lobby, league, channel, config)
   config/  persistent config store (keybinds/handling/video/audio + TETR.IO import)
+  client.ts room and league state, commands and session event forwarding
 docs/      protocol research: PROTOCOL.md, command_table.json, gamemechanics.md, kicktables.md,
            tetra_channel_api.txt, tetrio_constants.json, and deobfuscated client/capture references.
 ```
@@ -77,7 +91,7 @@ docs/      protocol research: PROTOCOL.md, command_table.json, gamemechanics.md,
 - **theorypack** == msgpackr with default options (records/structures on, string bundling off) —
   verified byte-identical to the official client.
 - **Ribbon**: WS binary frames `[flags:2|code:6][u24be id?][payload]`; generic channel `code 43`
-  carries `u8 command + msgpackr(data)`. Handshake: `new` → `session` → `authorize` → `social.presence`.
+  carries `u8 command + msgpackr(data)`. Handshake: `new` → `session` → `server.authorize` → `social.presence`.
 - **NetCodec**: the game stream (boards, pieces, full states, in-game events) is a bit-level
   (MSB-first) schema codec riding msgpackr extension types ≥ 10.
 - **Login**: `POST /api/users/authenticate` (or `/api/users/anonymousJoin`) → JWT →
@@ -89,13 +103,18 @@ See [`docs/PROTOCOL.md`](docs/PROTOCOL.md) for the full write-up.
 ## Development
 
 ```bash
-npm run typecheck    # tsc
-npm test             # vitest (unit + capture + tui pty snapshots)
-RUN_LIVE=1 npm test  # + live-network integration tests (anonymous account)
+npm run typecheck    # TypeScript check without emitting files
+npm test             # vitest (unit + capture + local TUI pty tests)
 ```
 
+Live-network tests are disabled by default. `RUN_LIVE=1` enables
+`test/net.session.test.ts`, which creates an anonymous account and authorizes a Ribbon
+connection; it does not exercise room spectating or League gameplay. Do not enable it
+for documentation checks; account/API restrictions in [Safety](#safety--terms) still apply.
+PTY tests run locally and are skipped when `CI=true` unless `PTY_TESTS=1`.
+
 TUI testing uses [`tuistory`](https://github.com/remorses/tuistory) (pty snapshot tests) and
-[`ghostty-opentui`](https://github.com/remorses/tuistory) for rendering terminal frames to PNGs.
+[`ghostty-opentui`](https://github.com/remorses/ghostty-opentui) for rendering terminal frames to PNGs.
 
 ## Safety & Terms
 

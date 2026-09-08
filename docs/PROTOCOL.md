@@ -6,7 +6,7 @@ Old community docs (lemoncove/tetrio-bot-docs, 2022, v6.2.0) are OUTDATED but co
 ## Three surfaces
 
 1. **TETRA CHANNEL REST API** — `https://ch.tetr.io/api/` — PUBLIC stats/leaderboards/replays/news.
-   Documented at `https://tetr.io/about/api`. No auth needed. JSON. (see tetra_channel_api.md)
+   Documented at `https://tetr.io/about/api`. No auth needed. JSON. (see [tetra_channel_api.txt](tetra_channel_api.txt))
 2. **Main Game API** — `https://tetr.io/api/` — auth, environment, ribbon endpoint. theorypack-encoded.
    (officially "not allowed without written consent" for bots; we use it for an interactive client.)
 3. **Ribbon WebSocket** — `wss://<region>-<name>.spool.tetr.io/ribbon/<spoolname>` — real-time game. theorypack-encoded.
@@ -65,8 +65,8 @@ F_ID is set on generic channel packets (0xab = 0x80|0x2b -> code 43 + F_ID). Ded
 Handshake:
 1. client → `new` (code 25, 1 byte `0x19`)
 2. server → `packets` (code 7) containing nested `session` (code 44) {ribbonid, tokenid}
-3. client → `authorize` (code 43, F_ID) {token, handling, signature:{...environment}, i: commitHash}
-4. server → `authorize` (code 43, F_ID, same id) {success, maintenance, worker:{name,flag}, social:{total_online, notifications, presences, relationships}}
+3. client → `server.authorize` (Ribbon code 43, generic command 210, F_ID) {token, handling, signature:{...environment}, i: commitHash}
+4. server → `server.authorize` (Ribbon code 43, generic command 210, F_ID, same id) {success, maintenance, worker:{name,flag}, social:{total_online, notifications, presences, relationships}}
 5. client → `social.presence` {status:"online", detail:"menus"}
 6. keepalive: client sends `ping {recvid}` every ~2.5-5s; server replies `ping {recvid}`.
 
@@ -87,4 +87,4 @@ how many server messages we've processed; server trims its resend queue accordin
 ## Captures
 
 - `captures/ws_handshake.json` — full authorize handshake (anonymous).
-- `captures/auth_decoded.json` — decoded authorize message.
+- [`captures/decoded_handshake.txt`](captures/decoded_handshake.txt) — decoded handshake trace, including `server.authorize`.

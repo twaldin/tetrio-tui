@@ -1,5 +1,11 @@
 # SRS/SRS+ kick tables for tetrio-tui (board coords: x right, y DOWN, +y = toward floor)
 
+> **Superseded planning notes — preserved for historical context.** The I/O and 180° kicks,
+> attack/combo values and spawn description below differ from the implemented rules.
+> Use [gamemechanics.md](gamemechanics.md) for the extracted mechanics reference and
+> [src/game/pieces.ts](../src/game/pieces.ts) / [src/game/engine.ts](../src/game/engine.ts)
+> for the current implementation.
+
 Rotations: 0=spawn, R=CW, 2=180, L=CCW. Each entry = list of (dx, dy) offsets tried in order.
 TETR.IO SRS+ == standard SRS for CW/CCW + SRS-X for 180. Validate against captures; adjust if needed.
 
